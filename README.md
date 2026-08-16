@@ -27,7 +27,7 @@ Documentation:
 ### 1. Backend
 
 ```bash
-python3 -m venv .venv
+python-m venv .venv
 .venv/bin/pip install -r backend/requirements/local.txt
 cd backend
 ../.venv/bin/python manage.py migrate
