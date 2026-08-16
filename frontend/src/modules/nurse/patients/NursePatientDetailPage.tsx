@@ -1,0 +1,34 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Activity, ArrowLeft, FileText, ShieldPlus, UserRoundX } from 'lucide-react'
+import { useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+
+import { AppApiError } from '../../../shared/api/errors'
+import { Button } from '../../../shared/ui/actions/Button'
+import { StatusBadge } from '../../../shared/ui/data-display/StatusBadge'
+import { Alert } from '../../../shared/ui/feedback/Alert'
+import { EmptyState } from '../../../shared/ui/feedback/EmptyState'
+import { FormField } from '../../../shared/ui/forms/FormField'
+import { PageHeader } from '../../../shared/ui/navigation/PageHeader'
+import { Modal } from '../../../shared/ui/overlays/Modal'
+import { getGuardians, getPatient, inviteGuardian, revokeGuardian } from '../../patient-care/shared/api'
+import { PatientOverview } from '../../patient-care/shared/PatientOverview'
+import { PatientPageState } from '../../patient-care/shared/PatientPageState'
+
+const emptyForm = { email: '', relationship: '', can_view_medical_file: true, can_answer_monitoring: true, can_decide_transfers: true, can_view_billing: false }
+
+export function NursePatientDetailPage() {
+  const { patientId = '' } = useParams()
+  const client = useQueryClient()
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [form, setForm] = useState(emptyForm)
+  const patient = useQuery({ queryKey: ['patient', patientId], queryFn: () => getPatient(patientId), enabled: Boolean(patientId) })
+  const guardians = useQuery({ queryKey: ['patient-guardians', patientId], queryFn: () => getGuardians(patientId), enabled: Boolean(patientId) })
+  const refresh = () => Promise.all([client.invalidateQueries({ queryKey: ['patient', patientId] }), client.invalidateQueries({ queryKey: ['patient-guardians', patientId] }), client.invalidateQueries({ queryKey: ['patients'] }), client.invalidateQueries({ queryKey: ['patient-dashboard'] })])
+  const inviteMutation = useMutation({ mutationFn: () => inviteGuardian(patientId, form), onSuccess: async () => { setInviteOpen(false); setForm(emptyForm); await refresh() } })
+  const revokeMutation = useMutation({ mutationFn: (accessId: string) => revokeGuardian(patientId, accessId), onSuccess: refresh })
+
+  return <div className="workspace-page"><div className="back-link"><Link to="/nurse/patients"><ArrowLeft size={16} /> Back to my patients</Link></div><PageHeader eyebrow="Assigned patient" title={patient.data?.full_name ?? 'Patient record'} description={patient.data ? `${patient.data.medical_record_number} · Access granted through your active Nurse assignment.` : 'Loading authorized patient information.'} actions={patient.data && <><Link className="button button--secondary" to={`/nurse/patients/${patientId}/medical-file`}><FileText size={16} /> Medical file</Link><Link className="button button--secondary" to={`/nurse/patients/${patientId}/vitals`}><Activity size={16} /> History</Link><Link className="button button--primary" to={`/nurse/patients/${patientId}/vitals/new`}><Activity size={16} /> Record vitals</Link></>} /><PatientPageState pending={patient.isPending} error={patient.error} />{patient.data && <><PatientOverview patient={patient.data} /><section className="section-panel table-panel guardian-section"><div className="section-panel__heading"><div><p className="eyebrow">Patient Guard access</p><h2>Authorized representatives</h2></div><Button variant="secondary" onClick={() => setInviteOpen(true)}><ShieldPlus size={15} /> Invite</Button></div>{guardians.isPending ? null : (guardians.data?.length ?? 0) === 0 ? <EmptyState title="No Patient Guard linked" description="Invite the patient's authorized representative. They will choose their own password." action={<Button onClick={() => setInviteOpen(true)}>Invite Patient Guard</Button>} /> : <div className="table-scroll"><table className="data-table"><thead><tr><th>Representative</th><th>Relationship</th><th>Permissions</th><th>Status</th><th /></tr></thead><tbody>{guardians.data!.map((access) => <tr key={access.id}><td><strong>{access.full_name}</strong><small>{access.email}</small></td><td>{access.relationship}</td><td><span className="permission-summary">{[access.can_view_medical_file && 'Medical file', access.can_answer_monitoring && 'Monitoring', access.can_decide_transfers && 'Transfers', access.can_view_billing && 'Billing'].filter(Boolean).join(' · ')}</span></td><td><StatusBadge status={access.status} /></td><td>{access.status !== 'REVOKED' && <Button variant="ghost" disabled={revokeMutation.isPending} onClick={() => revokeMutation.mutate(access.id)}><UserRoundX size={15} /> Revoke</Button>}</td></tr>)}</tbody></table></div>}</section></>}
+    <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite Patient Guard" description="This invitation links the new account only to this patient."><form onSubmit={(event) => { event.preventDefault(); inviteMutation.mutate() }}><FormField label="Email address" type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /><FormField label="Relationship to patient" required placeholder="For example: parent, spouse, sibling" value={form.relationship} onChange={(event) => setForm({ ...form, relationship: event.target.value })} /><fieldset className="permission-fieldset"><legend>Authorized access</legend><label className="check-field"><input type="checkbox" checked={form.can_view_medical_file} onChange={(event) => setForm({ ...form, can_view_medical_file: event.target.checked })} /><span><strong>Released medical-file information</strong><small>Does not include internal clinical notes.</small></span></label><label className="check-field"><input type="checkbox" checked={form.can_answer_monitoring} onChange={(event) => setForm({ ...form, can_answer_monitoring: event.target.checked })} /><span><strong>Monitoring questions</strong></span></label><label className="check-field"><input type="checkbox" checked={form.can_decide_transfers} onChange={(event) => setForm({ ...form, can_decide_transfers: event.target.checked })} /><span><strong>Transfer decisions</strong></span></label><label className="check-field"><input type="checkbox" checked={form.can_view_billing} onChange={(event) => setForm({ ...form, can_view_billing: event.target.checked })} /><span><strong>Billing information</strong><small>Off by default.</small></span></label></fieldset>{inviteMutation.error && <Alert tone="critical">{inviteMutation.error instanceof AppApiError ? inviteMutation.error.message : 'Invitation could not be sent.'}</Alert>}<div className="modal__actions"><Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>Cancel</Button><Button type="submit" isLoading={inviteMutation.isPending}>Send secure invitation</Button></div></form></Modal>
+  </div>
+}

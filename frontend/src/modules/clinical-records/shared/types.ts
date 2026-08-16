@@ -1,0 +1,8 @@
+export type GuardianVisibility = 'INTERNAL' | 'GUARDIAN'
+export interface Allergy { id: string; patient: string; substance: string; reaction: string; severity: string; severity_label: string; status: string; recorded_at: string; recorded_by_name: string; guardian_visibility: GuardianVisibility }
+export interface HistoryEntry { id: string; patient: string; category: string; category_label: string; title: string; occurred_on: string | null; description: string; source: string; recorded_by_name: string; guardian_visibility: GuardianVisibility }
+export interface Diagnosis { id: string; patient: string; care_episode: string | null; condition: string; code_snapshot: string; name_snapshot: string; description: string; status: string; status_label: string; diagnosed_at: string; diagnosed_by_name: string; guardian_visibility: GuardianVisibility }
+export interface TreatmentPlan { id: string; patient: string; care_episode: string | null; title: string; objectives: string; instructions: string; status: string; status_label: string; starts_on: string; ends_on: string | null; authored_by_name: string; guardian_visibility: GuardianVisibility }
+export interface ClinicalNote { id: string; patient: string; care_episode: string | null; note_type: string; note_type_label: string; title: string; body: string; status: string; signed_at: string | null; author_name: string; amends: string | null; guardian_visibility: GuardianVisibility; created_at: string }
+export interface ClinicalCondition { id: string; code: string; name: string; coding_system: string; is_active: boolean }
+export interface ClinicalRecordBundle { allergies: Allergy[]; history: HistoryEntry[]; diagnoses: Diagnosis[]; treatmentPlans: TreatmentPlan[]; notes: ClinicalNote[] }
