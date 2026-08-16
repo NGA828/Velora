@@ -10,6 +10,10 @@ export function QueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
+            // Keep recently visited screens responsive instead of refetching the same data
+            // on every route transition. Mutations and realtime events still invalidate
+            // their affected query keys immediately.
+            staleTime: 15_000,
             refetchOnWindowFocus: false,
             retry: (failureCount, error) =>
               error instanceof AppApiError && error.status >= 500 && failureCount < 1,
