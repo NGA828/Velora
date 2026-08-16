@@ -4,10 +4,33 @@ import json
 import tarfile
 
 import pytest
+from django.core.management import call_command
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.common.backup import _safe_extract, load_and_verify_manifest
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=True)
+def test_demo_seed_uses_dot_com_accounts_and_requested_password():
+    call_command("seed_demo", verbosity=0)
+
+    from apps.identity.models import User
+
+    expected = {
+        "admin@velora.com",
+        "head@velora.com",
+        "doctor@velora.com",
+        "nurse@velora.com",
+        "guard@velora.com",
+        "accounts@velora.com",
+    }
+    users = User.objects.filter(email__in=expected)
+    assert set(users.values_list("email", flat=True)) == expected
+    assert all(user.check_password("password123") for user in users)
+    assert not User.objects.filter(email__endswith=".local").exists()
 
 
 @pytest.mark.django_db

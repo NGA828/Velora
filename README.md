@@ -33,7 +33,15 @@ cd backend
 ../.venv/bin/python manage.py migrate
 ```
 
-Create the first Admin without putting its password in shell history:
+For the local demonstration environment only, create all six role accounts and connected sample data with:
+
+```bash
+../.venv/bin/python manage.py seed_demo
+```
+
+The demo credentials are `admin@velora.com`, `head@velora.com`, `doctor@velora.com`, `nurse@velora.com`, `guard@velora.com`, and `accounts@velora.com`, all using `password123`. This intentionally simple password is restricted to the `DEBUG=True` demo command and must never be used for production accounts.
+
+Create the first production/staging Admin without putting its password in shell history:
 
 ```bash
 export VELORA_BOOTSTRAP_PASSWORD='choose-a-long-private-password'

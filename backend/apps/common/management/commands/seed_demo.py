@@ -61,7 +61,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--password",
-            default="Velora-preview-927!",
+            default="password123",
             help="Shared local demo password.",
         )
 
@@ -69,6 +69,7 @@ class Command(BaseCommand):
         if not settings.DEBUG:
             raise CommandError("Demo data is disabled when DEBUG is false.")
         password = options["password"]
+        self._migrate_legacy_demo_emails()
         hospital, _ = HospitalProfile.objects.get_or_create(
             singleton_key=1,
             defaults={
@@ -79,11 +80,14 @@ class Command(BaseCommand):
                 "city": "Yaoundé",
                 "region": "Centre",
                 "country": "CM",
-                "email": "care@velora.local",
+                "email": "care@velora.com",
                 "phone": "+237 600 000 001",
                 "timezone": "Africa/Lagos",
             },
         )
+        if hospital.email != "care@velora.com":
+            hospital.email = "care@velora.com"
+            hospital.save(update_fields=["email", "updated_at"])
         department, _ = Department.objects.get_or_create(
             code="EMR",
             defaults={
@@ -98,7 +102,7 @@ class Command(BaseCommand):
         )
 
         admin, _ = self._staff(
-            "admin@velora.local",
+            "admin@velora.com",
             "Amara",
             "Administrator",
             UserRole.ADMIN,
@@ -111,7 +115,7 @@ class Command(BaseCommand):
         admin.is_superuser = True
         admin.save(update_fields=["is_staff", "is_superuser", "updated_at"])
         self._staff(
-            "head@velora.local",
+            "head@velora.com",
             "Nadia",
             "Essomba",
             UserRole.HEAD_OF_SERVICE,
@@ -121,7 +125,7 @@ class Command(BaseCommand):
             department,
         )
         doctor, _ = self._staff(
-            "doctor@velora.local",
+            "doctor@velora.com",
             "Samuel",
             "Mballa",
             UserRole.DOCTOR,
@@ -131,7 +135,7 @@ class Command(BaseCommand):
             department,
         )
         nurse, nurse_profile = self._staff(
-            "nurse@velora.local",
+            "nurse@velora.com",
             "Grace",
             "Fouda",
             UserRole.NURSE,
@@ -141,7 +145,7 @@ class Command(BaseCommand):
             department,
         )
         accounting, _ = self._staff(
-            "accounts@velora.local",
+            "accounts@velora.com",
             "Elise",
             "Ngo",
             UserRole.ACCOUNTING,
@@ -205,10 +209,17 @@ class Command(BaseCommand):
                 "region": "Centre",
                 "country": "CM",
                 "phone": "+237 600 000 200",
-                "email": "contact@partner.local",
-                "transfer_email": "transfers@partner.local",
+                "email": "contact@partner.com",
+                "transfer_email": "transfers@partner.com",
             },
         )
+        if (
+            external.email != "contact@partner.com"
+            or external.transfer_email != "transfers@partner.com"
+        ):
+            external.email = "contact@partner.com"
+            external.transfer_email = "transfers@partner.com"
+            external.save(update_fields=["email", "transfer_email", "updated_at"])
         ExternalHospitalSpecialty.objects.get_or_create(
             external_hospital=external, specialty=specialty
         )
@@ -236,7 +247,7 @@ class Command(BaseCommand):
                     "gender_identity": "",
                     "blood_type": "O+",
                     "phone": "+237 600 100 100",
-                    "email": "amina@preview.local",
+                    "email": "amina@preview.com",
                     "address": "Bastos, Yaoundé",
                     "emergency_contact_name": "Moussa Biya",
                     "emergency_contact_phone": "+237 600 100 101",
@@ -244,6 +255,9 @@ class Command(BaseCommand):
                 episode_type="INPATIENT",
                 admission_reason="Preview care episode for workflow review.",
             )
+        if patient.email != "amina@preview.com":
+            patient.email = "amina@preview.com"
+            patient.save(update_fields=["email", "updated_at"])
         episode = patient.care_episodes.filter(status="ACTIVE").first()
         guard = self._guardian(patient, nurse, password)
         guard_access = GuardianAccess.objects.get(
@@ -476,9 +490,30 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 "Demo data ready. Shared password: "
-                f"{password}. Users: admin, head, doctor, nurse, guard, accounts @velora.local"
+                f"{password}. Users: admin, head, doctor, nurse, guard, accounts @velora.com"
             )
         )
+
+    def _migrate_legacy_demo_emails(self):
+        email_mapping = {
+            "admin@velora.local": "admin@velora.com",
+            "head@velora.local": "head@velora.com",
+            "doctor@velora.local": "doctor@velora.com",
+            "nurse@velora.local": "nurse@velora.com",
+            "guard@velora.local": "guard@velora.com",
+            "accounts@velora.local": "accounts@velora.com",
+        }
+        for old_email, new_email in email_mapping.items():
+            legacy = User.objects.filter(email=old_email).first()
+            current = User.objects.filter(email=new_email).first()
+            if legacy and not current:
+                legacy.email = new_email
+                legacy.save(update_fields=["email", "updated_at"])
+            elif legacy and current and legacy.pk != current.pk:
+                legacy.email = f"legacy-{legacy.id}@example.com"
+                legacy.is_active = False
+                legacy.save(update_fields=["email", "is_active", "updated_at"])
+            Invitation.objects.filter(email=old_email).update(email=new_email)
 
     def _staff(
         self,
@@ -523,7 +558,7 @@ class Command(BaseCommand):
 
     def _guardian(self, patient, nurse, password):
         guard, _ = User.objects.get_or_create(
-            email="guard@velora.local",
+            email="guard@velora.com",
             defaults={
                 "first_name": "Moussa",
                 "last_name": "Biya",
