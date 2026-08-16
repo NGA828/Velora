@@ -1,0 +1,14 @@
+import { useQuery } from '@tanstack/react-query'
+import { Banknote, Download, FileText, WalletCards } from 'lucide-react'
+
+import { Alert } from '../../../shared/ui/feedback/Alert'
+import { SectionLoader } from '../../../shared/ui/feedback/SectionLoader'
+import { PageHeader } from '../../../shared/ui/navigation/PageHeader'
+import { getFinancialReport } from '../../billing/shared/api'
+import { formatMoney } from '../../billing/shared/format'
+
+export function FinancialReportsPage() {
+  const query = useQuery({ queryKey: ['financial-report'], queryFn: getFinancialReport })
+  const data = query.data
+  return <div className="workspace-page"><PageHeader eyebrow="Financial reporting" title="Billing reports" description="Financial aggregates only; no diagnoses or clinical details are included." actions={<a className="button button--secondary" href="/api/v1/reports/financial/export/"><Download size={16} /> Export CSV</a>} />{query.isPending ? <SectionLoader /> : query.error ? <Alert tone="critical">Financial report could not be generated.</Alert> : data && <><section className="metric-grid metric-grid--three"><article className="metric-card"><span className="metric-card__icon metric-card__icon--blue"><FileText /></span><div><small>Total billed</small><strong>{formatMoney(data.billed, data.currency)}</strong><p>{data.invoice_count} invoices</p></div></article><article className="metric-card"><span className="metric-card__icon metric-card__icon--green"><Banknote /></span><div><small>Collected</small><strong>{formatMoney(data.collected, data.currency)}</strong><p>{data.payment_count} posted payments</p></div></article><article className="metric-card"><span className="metric-card__icon metric-card__icon--amber"><WalletCards /></span><div><small>Outstanding</small><strong>{formatMoney(data.outstanding, data.currency)}</strong><p>Issued invoice balance</p></div></article></section><div className="dashboard-columns"><section className="section-panel table-panel"><div className="section-panel__heading"><div><p className="eyebrow">Invoices</p><h2>By status</h2></div></div><table className="data-table"><thead><tr><th>Status</th><th>Count</th><th>Total</th></tr></thead><tbody>{data.by_invoice_status.map((item) => <tr key={item.status}><td>{item.status.replaceAll('_', ' ').toLowerCase()}</td><td>{item.count}</td><td>{formatMoney(item.total, data.currency)}</td></tr>)}</tbody></table></section><section className="section-panel table-panel"><div className="section-panel__heading"><div><p className="eyebrow">Collections</p><h2>By payment method</h2></div></div><table className="data-table"><thead><tr><th>Method</th><th>Count</th><th>Total</th></tr></thead><tbody>{data.by_payment_method.map((item) => <tr key={item.method}><td>{item.method.replaceAll('_', ' ').toLowerCase()}</td><td>{item.count}</td><td>{formatMoney(item.total, data.currency)}</td></tr>)}</tbody></table></section></div></>}</div>
+}

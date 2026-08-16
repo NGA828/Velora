@@ -1,0 +1,1 @@
+export interface Notification { id: string; category: string; severity: string; title: string; body: string; route: string; data: Record<string, unknown>; actor_name: string | null; patient: string | null; patient_name: string | null; delivered_at: string | null; read_at: string | null; created_at: string }

@@ -1,0 +1,13 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "DJ"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py", "*_tests.py"]
+addopts = "-q --strict-markers --disable-warnings"
+testpaths = ["apps", "tests"]
