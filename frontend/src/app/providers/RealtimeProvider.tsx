@@ -1,10 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-interface RealtimeEvent {
-  type: string
-  payload?: { conversation_id?: string; call_session_id?: string }
-}
+import { publishRealtimeEvent, type RealtimeEvent } from '../../shared/realtime/bus'
 
 export function RealtimeProvider({ userId }: { userId: string }) {
   const client = useQueryClient()
@@ -20,7 +17,13 @@ export function RealtimeProvider({ userId }: { userId: string }) {
       socket = new WebSocket(`${protocol}//${window.location.host}/ws/events/`)
       socket.onopen = () => { attempts = 0 }
       socket.onmessage = (message) => {
-        const event = JSON.parse(message.data) as RealtimeEvent
+        let event: RealtimeEvent
+        try {
+          event = JSON.parse(message.data) as RealtimeEvent
+        } catch {
+          return
+        }
+        // Side-effect refreshes keep existing list/detail views fresh.
         if (event.type.startsWith('message.')) {
           void client.invalidateQueries({ queryKey: ['conversations'] })
           if (event.payload?.conversation_id) {
@@ -33,6 +36,8 @@ export function RealtimeProvider({ userId }: { userId: string }) {
         if (event.type.startsWith('call.')) {
           void client.invalidateQueries({ queryKey: ['calls'] })
         }
+        // Broadcast to components that need the raw payload (e.g. WebRTC signaling).
+        publishRealtimeEvent(event)
       }
       socket.onclose = () => {
         if (closed) return

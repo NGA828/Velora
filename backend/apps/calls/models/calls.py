@@ -5,6 +5,10 @@ from apps.common.models import UUIDTimeStampedModel
 
 
 class CallSession(UUIDTimeStampedModel):
+    class Provider(models.TextChoices):
+        TWILIO = "TWILIO", "Twilio"
+        WEBRTC = "WEBRTC", "In-app WebRTC"
+
     class Status(models.TextChoices):
         QUEUED = "QUEUED", "Queued"
         RINGING = "RINGING", "Ringing"

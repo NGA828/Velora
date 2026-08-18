@@ -6,10 +6,20 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from apps.calls.api.serializers import CallCreateSerializer, CallSessionSerializer
+from apps.calls.api.serializers import (
+    CallCreateSerializer,
+    CallSessionSerializer,
+    CallSignalSerializer,
+    CallStatusSerializer,
+)
 from apps.calls.models import CallSession
 from apps.calls.permissions import IsActiveUser
-from apps.calls.services import cancel_call, initiate_call
+from apps.calls.services import (
+    cancel_call,
+    initiate_call,
+    signal_call,
+    update_call_status,
+)
 from apps.common.throttling import ActionScopedThrottleMixin
 from apps.messaging.models import Conversation
 from integrations.twilio.config import get_twilio_settings
@@ -62,7 +72,11 @@ class CallSessionViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
         )
 
     def create(self, request, *args, **kwargs):
-        if not get_twilio_settings().available:
+        # Preserve the Twilio contract: without Twilio configured, only an
+        # explicit in-app WebRTC call is permitted; everything else reports
+        # the integration as unavailable.
+        requested_provider = (request.data.get("provider") or "").upper()
+        if not get_twilio_settings().available and requested_provider != CallSession.Provider.WEBRTC:
             return unavailable_response()
         serializer = CallCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -83,6 +97,7 @@ class CallSessionViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
                 caller=request.user,
                 recipient=recipient,
                 conversation=conversation,
+                provider=serializer.validated_data["provider"],
                 request=request,
             )
         except DjangoValidationError as exc:
@@ -96,6 +111,39 @@ class CallSessionViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
     def cancel(self, request, pk=None):
         try:
             session = cancel_call(session=self.get_object(), actor=request.user, request=request)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"detail": exc.messages}) from exc
+        return Response(CallSessionSerializer(session).data)
+
+    @action(detail=True, methods=["post"])
+    def signal(self, request, pk=None):
+        session = self.get_object()
+        serializer = CallSignalSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            signal_call(
+                session=session,
+                sender=request.user,
+                to_user=serializer.validated_data["to_user"],
+                data=serializer.validated_data["data"],
+                request=request,
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"detail": exc.messages}) from exc
+        return Response({"detail": "Signal relayed."}, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=True, methods=["post"])
+    def status(self, request, pk=None):
+        session = self.get_object()
+        serializer = CallStatusSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            session = update_call_status(
+                session=session,
+                actor=request.user,
+                status=serializer.validated_data["status"],
+                request=request,
+            )
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"detail": exc.messages}) from exc
         return Response(CallSessionSerializer(session).data)

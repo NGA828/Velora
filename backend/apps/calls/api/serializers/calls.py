@@ -37,3 +37,17 @@ class CallSessionSerializer(serializers.ModelSerializer):
 class CallCreateSerializer(serializers.Serializer):
     recipient = serializers.UUIDField()
     conversation = serializers.UUIDField(required=False, allow_null=True)
+    provider = serializers.ChoiceField(
+        choices=[CallSession.Provider.TWILIO, CallSession.Provider.WEBRTC],
+        required=False,
+        default=CallSession.Provider.TWILIO,
+    )
+
+
+class CallSignalSerializer(serializers.Serializer):
+    to_user = serializers.UUIDField()
+    data = serializers.JSONField()
+
+
+class CallStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=CallSession.Status.choices)
