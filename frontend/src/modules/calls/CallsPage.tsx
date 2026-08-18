@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Mic, MicOff, Phone, PhoneCall, PhoneOff } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { useSession } from '../auth/hooks/use-session'
 import { AppApiError } from '../../shared/api/errors'
@@ -178,13 +179,14 @@ export function CallsPage() {
     resetToIdle()
   }, [sendSignal, closePeer, resetToIdle])
 
-  const startCall = useCallback(async () => {
-    if (!recipient || starting) return
+  const startCall = useCallback(async (targetRecipient?: string) => {
+    const target = targetRecipient ?? recipient
+    if (!target || starting) return
     setError('')
     setStarting(true)
     let created: CallSession
     try {
-      created = await createCall(recipient, null, 'WEBRTC')
+      created = await createCall(target, null, 'WEBRTC')
     } catch (exception) {
       setError(exception instanceof AppApiError ? exception.message : 'Could not start the call.')
       setStarting(false)
@@ -322,6 +324,21 @@ export function CallsPage() {
   }, [calls.data, phase, closePeer, resetToIdle])
 
   useEffect(() => () => closePeer(), [closePeer])
+
+  // Launch a call directly when arriving from a conversation (?recipient=...).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const autoStartedRef = useRef(false)
+  useEffect(() => {
+    if (autoStartedRef.current) return
+    const paramRecipient = searchParams.get('recipient')
+    if (!paramRecipient) return
+    if (!contacts.data) return
+    if (!contacts.data.some((contact) => contact.id === paramRecipient)) return
+    autoStartedRef.current = true
+    setRecipient(paramRecipient)
+    void startCall(paramRecipient)
+    setSearchParams({}, { replace: true })
+  }, [contacts.data, searchParams, startCall, setSearchParams])
 
   const incoming = calls.data?.find(
     (item) =>
