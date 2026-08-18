@@ -32,11 +32,28 @@ class VitalValueSerializer(serializers.ModelSerializer):
     metric_name = serializers.CharField(source="metric.name", read_only=True)
     metric_code = serializers.CharField(source="metric.code", read_only=True)
     unit = serializers.CharField(source="metric.unit", read_only=True)
+    contributes_to_assessment = serializers.BooleanField(
+        source="metric.contributes_to_assessment", read_only=True
+    )
+    is_critical = serializers.SerializerMethodField()
     evaluations = VitalRuleEvaluationSerializer(many=True, read_only=True)
 
     class Meta:
         model = VitalValue
-        fields = ("id", "metric", "metric_name", "metric_code", "unit", "value", "evaluations")
+        fields = (
+            "id",
+            "metric",
+            "metric_name",
+            "metric_code",
+            "unit",
+            "value",
+            "contributes_to_assessment",
+            "is_critical",
+            "evaluations",
+        )
+
+    def get_is_critical(self, obj) -> bool:
+        return any(evaluation.matched for evaluation in obj.evaluations.all())
 
 
 class VitalObservationSerializer(serializers.ModelSerializer):
@@ -56,6 +73,10 @@ class VitalObservationSerializer(serializers.ModelSerializer):
             "recorded_by_name",
             "status",
             "status_label",
+            "stability_percent",
+            "criticality_percent",
+            "assessed_metric_count",
+            "critical_metric_count",
             "notes",
             "analyzed_at",
             "rule_set_name_snapshot",

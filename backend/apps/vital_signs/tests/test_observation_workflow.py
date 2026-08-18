@@ -111,6 +111,12 @@ def test_configured_rules_produce_explainable_stable_and_critical_results():
     )
     assert history.status_code == 200
     assert history.json()["pagination"]["count"] == 2
+    assert stable.json()["stability_percent"] == 100
+    assert stable.json()["criticality_percent"] == 0
+    assert critical.json()["stability_percent"] == 0
+    assert critical.json()["criticality_percent"] == 100
+    assert critical.json()["assessed_metric_count"] == 1
+    assert critical.json()["critical_metric_count"] == 1
 
 
 @pytest.mark.django_db
@@ -140,3 +146,80 @@ def test_doctor_and_unassigned_nurse_cannot_record_vitals():
         == 404
     )
     assert VitalObservation.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_observation_score_uses_configured_rules_and_ignores_unscored_weight():
+    doctor, nurse, patient = configured_patient()
+    head, _ = create_staff(
+        role=UserRole.HEAD_OF_SERVICE,
+        email="head@example.org",
+        employee_number="HOS-001",
+    )
+    pulse = VitalMetric.objects.get(code="PULSE")
+    respiration = VitalMetric.objects.get(code="RR")
+    weight = VitalMetric.objects.get(code="WT")
+    weight.contributes_to_assessment = False
+    weight.save(update_fields=["contributes_to_assessment", "updated_at"])
+    rule_set = VitalRuleSet.objects.create(name="Adult vital reference", version=1)
+    VitalRule.objects.create(
+        rule_set=rule_set,
+        metric=pulse,
+        name="Tachycardia",
+        operator=VitalRule.Operator.GREATER_THAN,
+        lower_value=Decimal("100"),
+        explanation="Pulse is above the configured adult resting range.",
+    )
+    VitalRule.objects.create(
+        rule_set=rule_set,
+        metric=respiration,
+        name="Tachypnea",
+        operator=VitalRule.Operator.GREATER_THAN,
+        lower_value=Decimal("20"),
+        explanation="Respiration rate is above the configured adult resting range.",
+    )
+    activate_rule_set(rule_set=rule_set, actor=head)
+    client = APIClient()
+    client.force_authenticate(nurse)
+
+    response = client.post(
+        reverse("vital_signs:vital-observation-list"),
+        {
+            "patient": str(patient.id),
+            "values": [
+                {"metric": str(pulse.id), "value": "118"},
+                {"metric": str(respiration.id), "value": "16"},
+                {"metric": str(weight.id), "value": "68.5"},
+            ],
+        },
+        format="json",
+    )
+
+    payload = response.json()
+    assert response.status_code == 201
+    assert payload["status"] == VitalObservation.Status.CRITICAL
+    assert payload["stability_percent"] == 50
+    assert payload["criticality_percent"] == 50
+    assert payload["assessed_metric_count"] == 2
+    assert payload["critical_metric_count"] == 1
+    values = {item["metric_code"]: item for item in payload["values"]}
+    assert values["PULSE"]["is_critical"] is True
+    assert values["RR"]["is_critical"] is False
+    assert values["WT"]["contributes_to_assessment"] is False
+    assert values["WT"]["is_critical"] is False
+
+    client.force_authenticate(doctor)
+    listing = client.get(reverse("patients:patient-list")).json()["data"][0]
+    assert listing["latest_vital_status"] == VitalObservation.Status.CRITICAL
+    assert listing["latest_vital_stability_percent"] == 50
+    assert listing["latest_vital_criticality_percent"] == 50
+
+
+def test_compute_stability_score_returns_percentages():
+    from apps.vital_signs.services import compute_stability_score
+
+    assert compute_stability_score(assessed_count=0, critical_count=0) == (None, None)
+    assert compute_stability_score(assessed_count=5, critical_count=0) == (100, 0)
+    assert compute_stability_score(assessed_count=5, critical_count=1) == (80, 20)
+    assert compute_stability_score(assessed_count=5, critical_count=5) == (0, 100)
+    assert compute_stability_score(assessed_count=3, critical_count=1) == (67, 33)

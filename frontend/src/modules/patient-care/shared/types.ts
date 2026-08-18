@@ -16,6 +16,10 @@ export interface Patient {
   active_guardian_count: number
   latest_vital_status: 'UNASSESSED' | 'STABLE' | 'CRITICAL' | null
   latest_vital_at: string | null
+  latest_vital_stability_percent: number | null
+  latest_vital_criticality_percent: number | null
+  latest_vital_assessed_metric_count: number | null
+  latest_vital_critical_metric_count: number | null
   created_at: string
 }
 export interface CareTeamMember { id: string; staff_id: string; user_id: string; full_name: string; role: string; job_title: string; is_primary: boolean; starts_at: string }

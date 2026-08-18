@@ -22,6 +22,6 @@ export interface ExternalHospital { id: string; name: string; address: string; c
 export interface ExternalSpecialty { id: string; external_hospital: string; specialty: string; specialty_name: string; availability_status: string; notes: string }
 export interface ExternalService { id: string; external_hospital: string; service: string; service_name: string; availability_status: string; notes: string }
 export interface ExternalSpecialist { id: string; external_hospital: string; specialty: string; specialty_name: string; full_name: string; title: string; phone: string; email: string; is_active: boolean }
-export interface VitalMetric { id: string; code: string; name: string; unit: string; decimal_places: number; description: string; is_active: boolean }
+export interface VitalMetric { id: string; code: string; name: string; unit: string; decimal_places: number; description: string; display_order: number; contributes_to_assessment: boolean; is_active: boolean }
 export interface VitalRuleSet { id: string; name: string; version: number; description: string; status: string; rule_count: number; approved_by_name?: string | null; effective_from?: string | null; effective_to?: string | null }
 export interface VitalRule { id: string; rule_set: string; metric: string; metric_name: string; metric_unit: string; name: string; operator: string; operator_label: string; lower_value: string | null; upper_value: string | null; priority: number; explanation: string; is_active: boolean }

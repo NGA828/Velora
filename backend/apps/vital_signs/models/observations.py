@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from apps.common.models import UUIDTimeStampedModel
@@ -34,6 +35,18 @@ class VitalObservation(UUIDTimeStampedModel):
         default=Status.UNASSESSED,
         db_index=True,
     )
+    stability_percent = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    criticality_percent = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    assessed_metric_count = models.PositiveSmallIntegerField(default=0)
+    critical_metric_count = models.PositiveSmallIntegerField(default=0)
     notes = models.TextField(blank=True)
     analyzed_at = models.DateTimeField(null=True, blank=True)
     rule_set = models.ForeignKey(
@@ -68,7 +81,7 @@ class VitalValue(UUIDTimeStampedModel):
     value = models.DecimalField(max_digits=12, decimal_places=4)
 
     class Meta:
-        ordering = ["metric__name"]
+        ordering = ["metric__display_order", "metric__name"]
         constraints = [
             models.UniqueConstraint(
                 fields=["observation", "metric"],
