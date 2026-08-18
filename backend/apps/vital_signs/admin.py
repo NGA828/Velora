@@ -53,10 +53,26 @@ class VitalValueInline(admin.TabularInline):
 
 @admin.register(VitalObservation)
 class VitalObservationAdmin(admin.ModelAdmin):
-    list_display = ("patient", "observed_at", "status", "recorded_by", "rule_set")
+    list_display = (
+        "patient",
+        "observed_at",
+        "status",
+        "stability_percent",
+        "criticality_percent",
+        "recorded_by",
+        "rule_set",
+    )
     list_filter = ("status", "rule_set")
     search_fields = ("patient__medical_record_number", "patient__first_name", "patient__last_name")
-    readonly_fields = ("status", "analyzed_at", "rule_set")
+    readonly_fields = (
+        "status",
+        "stability_percent",
+        "criticality_percent",
+        "assessed_metric_count",
+        "critical_metric_count",
+        "analyzed_at",
+        "rule_set",
+    )
     inlines = (VitalValueInline,)
 
 

@@ -16,9 +16,11 @@ from apps.vital_signs.models import (
     VitalRuleSet,
     VitalValue,
 )
+from apps.vital_signs.services.metrics import compute_stability_score
 
 
 def rule_matches(*, rule: VitalRule, value: Decimal) -> bool:
+    value = Decimal(str(value))
     if rule.operator == VitalRule.Operator.LESS_THAN:
         return value < rule.upper_value
     if rule.operator == VitalRule.Operator.LESS_THAN_OR_EQUAL:
@@ -94,11 +96,16 @@ def record_and_analyze_observation(
 
     fully_assessed = True
     critical_explanations: list[str] = []
+    assessed_metric_ids: set[object] = set()
+    critical_metric_ids: set[object] = set()
     for observed_value in observed_values:
         metric_rules = rules_by_metric[observed_value.metric_id]
         if not metric_rules:
-            fully_assessed = False
+            if observed_value.metric.contributes_to_assessment:
+                fully_assessed = False
             continue
+        assessed_metric_ids.add(observed_value.metric_id)
+        matched_any = False
         for rule in metric_rules:
             matched = rule_matches(rule=rule, value=observed_value.value)
             explanation = (
@@ -121,7 +128,17 @@ def record_and_analyze_observation(
                 explanation=explanation,
             )
             if matched:
+                matched_any = True
                 critical_explanations.append(rule.explanation)
+        if matched_any:
+            critical_metric_ids.add(observed_value.metric_id)
+
+    assessed_count = len(assessed_metric_ids)
+    critical_count = len(critical_metric_ids)
+    stability_percent, criticality_percent = compute_stability_score(
+        assessed_count=assessed_count,
+        critical_count=critical_count,
+    )
 
     if critical_explanations:
         status = VitalObservation.Status.CRITICAL
@@ -130,6 +147,10 @@ def record_and_analyze_observation(
     else:
         status = VitalObservation.Status.UNASSESSED
     observation.status = status
+    observation.stability_percent = stability_percent
+    observation.criticality_percent = criticality_percent
+    observation.assessed_metric_count = assessed_count
+    observation.critical_metric_count = critical_count
     observation.analyzed_at = analyzed_at
     observation.rule_set = rule_set
     observation.rule_set_name_snapshot = rule_set.name
@@ -137,6 +158,10 @@ def record_and_analyze_observation(
     observation.save(
         update_fields=[
             "status",
+            "stability_percent",
+            "criticality_percent",
+            "assessed_metric_count",
+            "critical_metric_count",
             "analyzed_at",
             "rule_set",
             "rule_set_name_snapshot",
@@ -179,6 +204,8 @@ def _audit_observation(*, observation, actor, request=None) -> None:
         after={
             "patient_id": str(observation.patient_id),
             "status": observation.status,
+            "stability_percent": observation.stability_percent,
+            "criticality_percent": observation.criticality_percent,
             "rule_set": observation.rule_set_name_snapshot,
             "rule_set_version": observation.rule_set_version_snapshot,
             "observed_at": observation.observed_at.isoformat(),

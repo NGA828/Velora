@@ -56,6 +56,18 @@ class PatientListSerializer(serializers.ModelSerializer):
     active_guardian_count = serializers.IntegerField(read_only=True, default=0)
     latest_vital_status = serializers.CharField(read_only=True, allow_null=True, default=None)
     latest_vital_at = serializers.DateTimeField(read_only=True, allow_null=True, default=None)
+    latest_vital_stability_percent = serializers.IntegerField(
+        read_only=True, allow_null=True, default=None
+    )
+    latest_vital_criticality_percent = serializers.IntegerField(
+        read_only=True, allow_null=True, default=None
+    )
+    latest_vital_assessed_metric_count = serializers.IntegerField(
+        read_only=True, allow_null=True, default=None
+    )
+    latest_vital_critical_metric_count = serializers.IntegerField(
+        read_only=True, allow_null=True, default=None
+    )
 
     class Meta:
         model = Patient
@@ -75,6 +87,10 @@ class PatientListSerializer(serializers.ModelSerializer):
             "active_guardian_count",
             "latest_vital_status",
             "latest_vital_at",
+            "latest_vital_stability_percent",
+            "latest_vital_criticality_percent",
+            "latest_vital_assessed_metric_count",
+            "latest_vital_critical_metric_count",
             "created_at",
         )
 

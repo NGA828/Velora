@@ -21,7 +21,7 @@ def test_rule_set_requires_rules_before_activation_and_records_no_threshold_defa
         format="json",
     )
     assert metric.status_code == 201
-    assert VitalMetric.objects.get().rules.count() == 0
+    assert VitalMetric.objects.get(code="LOCAL_METRIC").rules.count() == 0
 
     rule_set = client.post(
         reverse("vital_signs:vital-rule-set-list"),

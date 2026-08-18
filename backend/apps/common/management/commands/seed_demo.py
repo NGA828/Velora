@@ -51,8 +51,12 @@ from apps.transfers.services import (
     generate_recommendations,
     submit_to_guardian,
 )
-from apps.vital_signs.models import VitalMetric, VitalObservation
-from apps.vital_signs.services import record_and_analyze_observation
+from apps.vital_signs.models import VitalMetric, VitalObservation, VitalRule, VitalRuleSet
+from apps.vital_signs.services import (
+    activate_rule_set,
+    ensure_standard_vital_metrics,
+    record_and_analyze_observation,
+)
 
 
 class Command(BaseCommand):
@@ -114,7 +118,7 @@ class Command(BaseCommand):
         admin.is_staff = True
         admin.is_superuser = True
         admin.save(update_fields=["is_staff", "is_superuser", "updated_at"])
-        self._staff(
+        head, _ = self._staff(
             "head@velora.com",
             "Nadia",
             "Essomba",
@@ -223,15 +227,9 @@ class Command(BaseCommand):
         ExternalHospitalSpecialty.objects.get_or_create(
             external_hospital=external, specialty=specialty
         )
-        metric, _ = VitalMetric.objects.get_or_create(
-            code="HR_LOCAL",
-            defaults={
-                "name": "Heart rate",
-                "unit": "beats/min",
-                "decimal_places": 0,
-                "description": "Metric only; no preview threshold is configured.",
-            },
-        )
+        metrics_by_code = {metric.code: metric for metric in ensure_standard_vital_metrics()}
+        VitalMetric.objects.filter(code="HR_LOCAL").update(is_active=False)
+        self._ensure_preview_vital_rules(head=head, metrics_by_code=metrics_by_code)
 
         patient = Patient.objects.filter(first_name="Amina", last_name="Biya").first()
         if not patient:
@@ -329,13 +327,27 @@ class Command(BaseCommand):
                 "guardian_visibility": "GUARDIAN",
             },
         )
-        if not VitalObservation.objects.filter(patient=patient).exists():
+        if not VitalObservation.objects.filter(
+            patient=patient, stability_percent__isnull=False
+        ).exists():
+            preview_values = [
+                ("TEMP", "36.8"),
+                ("PULSE", "72"),
+                ("RR", "16"),
+                ("SBP", "118"),
+                ("DBP", "76"),
+                ("WT", "68.5"),
+            ]
             record_and_analyze_observation(
                 patient=patient,
                 nurse=nurse,
                 observed_at=timezone.now(),
-                values=[{"metric": metric, "value": "72"}],
-                notes="Preview observation without an approved threshold.",
+                values=[
+                    {"metric": metrics_by_code[code], "value": Decimal(value)}
+                    for code, value in preview_values
+                    if code in metrics_by_code
+                ],
+                notes="Preview observation of the primary vital signs and body weight.",
             )
 
         medication, _ = Medication.objects.get_or_create(
@@ -493,6 +505,107 @@ class Command(BaseCommand):
                 f"{password}. Users: admin, head, doctor, nurse, guard, accounts @velora.com"
             )
         )
+
+    def _ensure_preview_vital_rules(self, *, head, metrics_by_code):
+        if VitalRuleSet.objects.filter(status=VitalRuleSet.Status.ACTIVE).exists():
+            return
+        rule_set, created = VitalRuleSet.objects.get_or_create(
+            name="Adult vital reference (preview)",
+            version=1,
+            defaults={
+                "description": (
+                    "Demonstration adult ranges for the primary vital signs. "
+                    "Replace with hospital-approved values before clinical use."
+                )
+            },
+        )
+        if rule_set.status != VitalRuleSet.Status.DRAFT:
+            return
+        preview_rules = (
+            (
+                "TEMP",
+                "Hypothermia",
+                VitalRule.Operator.LESS_THAN,
+                None,
+                "35",
+                "Body temperature is below the configured adult lower limit.",
+            ),
+            (
+                "TEMP",
+                "Fever",
+                VitalRule.Operator.GREATER_THAN,
+                "38",
+                None,
+                "Body temperature is above the configured adult fever threshold.",
+            ),
+            (
+                "PULSE",
+                "Bradycardia",
+                VitalRule.Operator.LESS_THAN,
+                None,
+                "60",
+                "Pulse is below the configured adult resting range.",
+            ),
+            (
+                "PULSE",
+                "Tachycardia",
+                VitalRule.Operator.GREATER_THAN,
+                "100",
+                None,
+                "Pulse is above the configured adult resting range.",
+            ),
+            (
+                "RR",
+                "Bradypnea",
+                VitalRule.Operator.LESS_THAN,
+                None,
+                "12",
+                "Respiration rate is below the configured adult resting range.",
+            ),
+            (
+                "RR",
+                "Tachypnea",
+                VitalRule.Operator.GREATER_THAN,
+                "20",
+                None,
+                "Respiration rate is above the configured adult resting range.",
+            ),
+            (
+                "SBP",
+                "High systolic pressure",
+                VitalRule.Operator.GREATER_THAN_OR_EQUAL,
+                "130",
+                None,
+                "Systolic blood pressure meets the configured hypertension threshold.",
+            ),
+            (
+                "DBP",
+                "High diastolic pressure",
+                VitalRule.Operator.GREATER_THAN_OR_EQUAL,
+                "80",
+                None,
+                "Diastolic blood pressure meets the configured hypertension threshold.",
+            ),
+        )
+        for code, name, operator, lower, upper, explanation in preview_rules:
+            metric = metrics_by_code.get(code)
+            if metric is None:
+                continue
+            VitalRule.objects.get_or_create(
+                rule_set=rule_set,
+                metric=metric,
+                name=name,
+                defaults={
+                    "operator": operator,
+                    "lower_value": Decimal(lower) if lower is not None else None,
+                    "upper_value": Decimal(upper) if upper is not None else None,
+                    "priority": 100,
+                    "explanation": explanation,
+                    "is_active": True,
+                },
+            )
+        if created or rule_set.rules.filter(is_active=True).exists():
+            activate_rule_set(rule_set=rule_set, actor=head)
 
     def _migrate_legacy_demo_emails(self):
         email_mapping = {

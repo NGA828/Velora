@@ -15,10 +15,18 @@ class VitalMetric(UUIDTimeStampedModel):
         validators=[MinValueValidator(0), MaxValueValidator(4)],
     )
     description = models.CharField(max_length=240, blank=True)
+    display_order = models.PositiveSmallIntegerField(default=100)
+    contributes_to_assessment = models.BooleanField(
+        default=True,
+        help_text=(
+            "When false, the measurement is stored (for example body weight) "
+            "but incomplete rule coverage does not mark the observation Unassessed."
+        ),
+    )
     is_active = models.BooleanField(default=True, db_index=True)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["display_order", "name"]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.unit})"

@@ -18,6 +18,14 @@ def patients_visible_to(user):
         ),
         latest_vital_status=Subquery(latest_vitals.values("status")[:1]),
         latest_vital_at=Subquery(latest_vitals.values("observed_at")[:1]),
+        latest_vital_stability_percent=Subquery(latest_vitals.values("stability_percent")[:1]),
+        latest_vital_criticality_percent=Subquery(latest_vitals.values("criticality_percent")[:1]),
+        latest_vital_assessed_metric_count=Subquery(
+            latest_vitals.values("assessed_metric_count")[:1]
+        ),
+        latest_vital_critical_metric_count=Subquery(
+            latest_vitals.values("critical_metric_count")[:1]
+        ),
     )
     if user.role in {UserRole.DOCTOR, UserRole.NURSE}:
         queryset = queryset.filter(
