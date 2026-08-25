@@ -32,6 +32,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { logout } from '../../modules/auth/api/auth-api'
 import { sessionQueryKey, useSession } from '../../modules/auth/hooks/use-session'
 import { AppApiError } from '../../shared/api/errors'
+import { CallOverlay } from '../../shared/calls/CallOverlay'
 import { RealtimeProvider } from '../providers/RealtimeProvider'
 import { Button } from '../../shared/ui/actions/Button'
 import { Alert } from '../../shared/ui/feedback/Alert'
@@ -154,6 +155,7 @@ export function HospitalShell() {
   return (
     <div className="hospital-shell">
       <RealtimeProvider userId={user.id} />
+      <CallOverlay userId={user.id} />
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <header className="mobile-topbar">
         <Brand />

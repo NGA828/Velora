@@ -565,8 +565,6 @@ small { font-size: 0.8rem; }
 .prescription-card__meta span { display: flex; align-items: center; gap: 6px; }
 .prescription-card__meta svg { width: 15px; }
 .prescription-medications { display: grid; gap: 1px; background: var(--color-border); }
-.prescription-medicatiodth: 15px; }
-.prescription-medications { display: grid; gap: 1px; background: var(--color-border); }
 .prescription-medications > section { padding: 17px 22px; background: white; }
 .prescription-medications section > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .prescription-medications section > div:first-child span { color: var(--color-muted); font-size: .76rem; }
@@ -731,6 +729,26 @@ small { font-size: 0.8rem; }
 .call-pulse { color: white; background: var(--color-success); animation: call-pulse 1.8s ease-in-out infinite; }
 @keyframes call-pulse { 50% { box-shadow: 0 0 0 9px rgb(22 122 88 / 12%); } }
 
+/* Global in-app call UI (visible on every page, not only /calls). */
+.call-overlay { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 20px; background: rgb(13 45 57 / 45%); backdrop-filter: blur(3px); }
+.call-overlay__card { width: min(400px, 100%); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 34px 28px 28px; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-lg); text-align: center; }
+.call-overlay__card .call-pulse { width: 72px; height: 72px; margin-bottom: 8px; border-radius: 50%; }
+.call-overlay__card h2 { margin: 0; font-size: 1.25rem; }
+.call-overlay__hint { margin: 0; color: var(--color-muted); font-size: .85rem; }
+.call-overlay__error { margin: 10px 0 0; padding: 9px 12px; border-radius: 10px; background: var(--color-critical-soft); color: var(--color-critical); font-size: .8rem; }
+.call-overlay__actions { display: flex; gap: 12px; margin-top: 20px; }
+.call-overlay__actions .button { min-width: 128px; justify-content: center; }
+.call-bar { position: fixed; left: 50%; bottom: 18px; z-index: 1100; display: flex; align-items: center; gap: 12px; width: min(560px, calc(100vw - 32px)); transform: translateX(-50%); padding: 12px 14px; border: 1px solid #abd3c4; border-radius: 16px; background: var(--color-surface); box-shadow: var(--shadow-lg); }
+.call-bar .call-pulse { animation-play-state: running; }
+.call-bar__copy { display: flex; flex-direction: column; align-items: flex-start; flex: 1; min-width: 0; }
+.call-bar__copy strong { font-size: .92rem; }
+.call-bar__copy small { color: var(--color-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.call-bar audio { display: none; }
+.call-toast { position: fixed; left: 50%; bottom: 84px; z-index: 1150; transform: translateX(-50%); padding: 10px 16px; border-radius: 12px; background: var(--color-text); color: #fff; box-shadow: var(--shadow-lg); font-size: .85rem; animation: call-toast-in .18s ease-out; }
+@keyframes call-toast-in { from { opacity: 0; transform: translate(-50%, 6px); } }
+
+.section-hint { margin: 14px 2px 0; color: var(--color-muted); font-size: .78rem; }
+
 @media (max-width: 900px) {
   .messaging-layout { grid-template-columns: 260px minmax(0, 1fr); }
   .call-control { grid-template-columns: 1fr; align-items: stretch; }
@@ -744,6 +762,8 @@ small { font-size: 0.8rem; }
   .message-composer input { flex-basis: calc(100% - 55px); }
   .message-composer .button { width: 100%; }
   .incoming-call, .active-call { align-items: stretch; flex-direction: column; }
+  .call-bar { width: calc(100vw - 24px); flex-wrap: wrap; }
+  .call-bar__copy { flex-basis: 100%; }
 }
 
 .invoice-list { display: grid; gap: 16px; }

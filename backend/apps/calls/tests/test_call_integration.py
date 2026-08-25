@@ -85,3 +85,53 @@ def test_signed_twilio_voice_and_status_webhooks_update_persisted_call(monkeypat
 
     invalid = client.post(status_path, status_params, HTTP_X_TWILIO_SIGNATURE="invalid")
     assert invalid.status_code == 403
+
+
+@pytest.mark.django_db
+def test_webrtc_offer_and_answer_are_persisted_for_late_accept():
+    """The callee must be able to recover the offer/answer from the API even
+    when the realtime delivery was missed (e.g. they were on another page)."""
+    doctor, nurse, _, _, _ = monitoring_context()
+    doctor_client = APIClient()
+    doctor_client.force_authenticate(doctor)
+    created = doctor_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+    assert created.json()["status"] == CallSession.Status.QUEUED
+
+    offer = "v=0\r\no=- 4611722893312512233 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n"
+    relayed = doctor_client.post(
+        reverse("calls:call-signal", args=[session_id]),
+        {"to_user": str(nurse.id), "data": {"type": "offer", "sdp": offer}},
+        format="json",
+    )
+    assert relayed.status_code == 202
+
+    # The callee fetches the call detail after the incoming event and gets the
+    # persisted offer even though their socket may have missed the signal.
+    nurse_client = APIClient()
+    nurse_client.force_authenticate(nurse)
+    detail = nurse_client.get(reverse("calls:call-detail", args=[session_id]))
+    assert detail.status_code == 200
+    assert detail.json()["offer_sdp"] == offer
+    assert detail.json()["offer_from"] == str(doctor.id)
+    assert detail.json()["answer_sdp"] == ""
+
+    answer = "v=0\r\no=- 7017249262185250846 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n"
+    answered = nurse_client.post(
+        reverse("calls:call-signal", args=[session_id]),
+        {"to_user": str(doctor.id), "data": {"type": "answer", "sdp": answer}},
+        format="json",
+    )
+    assert answered.status_code == 202
+
+    # The caller can recover the answer the same way if its socket missed it.
+    detail = doctor_client.get(reverse("calls:call-detail", args=[session_id]))
+    assert detail.status_code == 200
+    assert detail.json()["answer_sdp"] == answer
+    assert detail.json()["answer_from"] == str(nurse.id)
+    assert detail.json()["offer_sdp"] == offer

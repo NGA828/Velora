@@ -53,7 +53,10 @@ def initiate_call(*, caller, recipient, conversation=None, request=None, provide
             publish_user_event(
                 user_id=user_id,
                 event_type="call.initiated",
-                payload={"call_session_id": str(session.id)},
+                payload={
+                    "call_session_id": str(session.id),
+                    "initiated_by": str(caller.id),
+                },
             )
             for user_id in [caller.id, recipient.id]
         ]
@@ -103,6 +106,17 @@ def signal_call(*, session, sender, to_user, data, request=None):
         raise ValidationError("The signaling target is not a participant in this call.")
     if sender.id == to_user:
         raise ValidationError("A call cannot signal itself.")
+    # Persist the WebRTC offer/answer so the other participant can always
+    # recover it from the API, even if the realtime delivery was missed
+    # (e.g. they were on another page or their socket was reconnecting).
+    if isinstance(data, dict) and data.get("type") == "offer":
+        locked.offer_sdp = str(data.get("sdp") or "")
+        locked.offer_from = sender
+        locked.save(update_fields=["offer_sdp", "offer_from", "updated_at"])
+    elif isinstance(data, dict) and data.get("type") == "answer":
+        locked.answer_sdp = str(data.get("sdp") or "")
+        locked.answer_from = sender
+        locked.save(update_fields=["answer_sdp", "answer_from", "updated_at"])
     transaction.on_commit(
         lambda: publish_user_event(
             user_id=to_user,

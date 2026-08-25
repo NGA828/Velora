@@ -6,6 +6,8 @@ export interface RealtimeEvent {
     conversation_id?: string
     call_session_id?: string
     from_user?: string
+    initiated_by?: string
+    status?: string
     data?: unknown
   }
 }

@@ -12,6 +12,7 @@ export async function acknowledgeMessages(conversation: string, upToMessage: str
 export async function getCallAvailability(): Promise<{ available: boolean }> { return (await apiClient.get<{ available: boolean }>('/calls/availability/')).data }
 export async function getVoiceToken(): Promise<{ token: string; identity: string; expires_in: number }> { return (await apiClient.get('/calls/token/')).data }
 export async function getCalls(): Promise<CallSession[]> { return (await apiClient.get<PaginatedResponse<CallSession>>('/calls/', { params: { page_size: 100 } })).data.data }
+export async function getCall(id: string): Promise<CallSession> { return (await apiClient.get<CallSession>(`/calls/${id}/`)).data }
 export async function createCall(recipient: string, conversation?: string | null, provider: 'WEBRTC' | 'TWILIO' = 'WEBRTC'): Promise<CallSession> { await prepareCsrf(); return (await apiClient.post<CallSession>('/calls/', { recipient, conversation: conversation || null, provider })).data }
 export async function cancelCall(id: string): Promise<CallSession> { await prepareCsrf(); return (await apiClient.post<CallSession>(`/calls/${id}/cancel/`)).data }
 export async function signalCall(id: string, toUser: string, data: unknown): Promise<void> { await prepareCsrf(); await apiClient.post(`/calls/${id}/signal/`, { to_user: toUser, data }) }

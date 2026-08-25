@@ -762,6 +762,8 @@ Legend: **Manage** = create/read/update through valid transitions; **Scoped** = 
 - Eligible call initiation, short-lived Twilio client token, call detail/history, decline/end actions.
 - Signed Twilio voice/status webhooks update `CallSession` and participants idempotently.
 - Provider availability endpoint lets UI disable calling with an explanation.
+- WebRTC calls ring app-wide: a global call overlay (mounted in the application shell, not on the `/calls` page) surfaces incoming calls on any route, with a background poll as a safety net when the realtime socket is unavailable.
+- WebRTC offers/answers are persisted on `CallSession` (`offer_sdp`/`offer_from`, `answer_sdp`/`answer_from`) when relayed through `POST /calls/{id}/signal/`, so a participant who missed the realtime delivery (different page, reconnecting socket) recovers the signal from `GET /calls/{id}/` when accepting or connecting instead of failing.
 
 ### Notifications — `/notifications`
 
