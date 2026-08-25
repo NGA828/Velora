@@ -1,7 +1,7 @@
 import { apiClient } from '../../../shared/api/client'
 import { prepareCsrf } from '../../../shared/api/csrf'
 import type { PaginatedResponse } from '../../../shared/api/pagination'
-import type { CatalogItem, TransferRequest } from './types'
+import type { CatalogItem, TransferRequest, TransferSuggestion } from './types'
 
 export async function getTransferCatalog(path: 'specialties' | 'services' | 'clinical-conditions'): Promise<CatalogItem[]> {
   return (await apiClient.get<PaginatedResponse<CatalogItem>>(`/hospital/${path}/`, { params: { is_active: 'true', page_size: 100 } })).data.data
@@ -14,3 +14,6 @@ export async function generateTransferRecommendations(id: string): Promise<Trans
 export async function submitTransfer(id: string, hospital: string): Promise<TransferRequest> { await prepareCsrf(); return (await apiClient.post<TransferRequest>(`/transfer-requests/${id}/submit/`, { hospital })).data }
 export async function decideTransfer(id: string, decision: 'APPROVE' | 'REJECT', reason: string): Promise<TransferRequest> { await prepareCsrf(); return (await apiClient.post<TransferRequest>(`/transfer-requests/${id}/decide/`, { decision, reason })).data }
 export async function sendTransferPackage(id: string): Promise<TransferRequest> { await prepareCsrf(); return (await apiClient.post<TransferRequest>(`/transfer-requests/${id}/send-package/`)).data }
+export async function suggestTransferRequirements(patient: string): Promise<TransferSuggestion[]> {
+  return (await apiClient.get<{ suggestions: TransferSuggestion[] }>('/transfer-requests/suggest-requirements/', { params: { patient } })).data.suggestions
+}

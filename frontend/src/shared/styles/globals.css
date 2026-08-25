@@ -282,6 +282,10 @@ small { font-size: 0.8rem; }
 .summary-strip span { display: flex; flex-direction: column; }
 .summary-strip small { color: var(--color-muted); }
 .summary-strip strong { font-size: 1.2rem; }
+.attachment-upload { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 4px 0 16px; padding: 14px 16px; border: 1px dashed var(--color-border); border-radius: 10px; }
+.attachment-upload p { margin: 3px 0 0; color: var(--color-muted); font-size: .78rem; }
+.row-actions { display: flex; align-items: center; gap: 8px; }
+.button--small { min-height: 30px; padding: 5px 10px; font-size: .78rem; border-radius: 8px; }
 .table-panel { margin-bottom: 24px; padding-bottom: 10px; }
 .table-scroll { overflow-x: auto; margin: 0 -26px; padding: 0 26px; }
 .data-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
@@ -710,6 +714,8 @@ small { font-size: 0.8rem; }
 .requirement-form { display: grid; grid-template-columns: auto 1fr 1fr 100px auto auto; align-items: end; gap: 10px; margin-bottom: 10px; padding: 13px; border: 1px solid var(--color-border); border-radius: 10px; }
 .requirement-form > span { width: 28px; height: 28px; display: grid; place-items: center; align-self: center; border-radius: 8px; color: var(--color-primary); background: var(--color-primary-soft); font-weight: 800; }
 .requirement-form .form-field, .requirement-form .check-field { margin: 0; }
+.requirement-form .requirement-source { grid-column: 2 / -1; margin: -6px 0 2px; color: var(--color-muted); font-size: .72rem; }
+.requirement-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .certificate-card dl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 17px; margin: 0; padding: 20px 22px; }
 .certificate-card dt { color: var(--color-muted); font-size: .7rem; }
 .certificate-card dd { margin: 4px 0 0; font-weight: 620; overflow-wrap: anywhere; }

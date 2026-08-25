@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Prefetch
+from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
@@ -23,6 +24,7 @@ from apps.transfers.services import (
     decide_transfer,
     generate_recommendations,
     submit_to_guardian,
+    suggest_transfer_requirements,
     transmit_medical_package,
 )
 
@@ -98,6 +100,23 @@ class TransferRequestViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
         return Response(
             TransferRequestSerializer(_full_queryset().get(pk=transfer.pk)).data,
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=["get"], url_path="suggest-requirements")
+    def suggest_requirements(self, request):
+        """Suggest transfer requirements from the patient's medical file:
+        conditions + mapped specialties derived from active diagnoses."""
+        patient_id = request.query_params.get("patient")
+        if not patient_id:
+            raise serializers.ValidationError({"patient": "Select a patient."})
+        patient = get_object_or_404(
+            patients_visible_to(request.user).filter(
+                medical_file__isnull=False,
+            ),
+            pk=patient_id,
+        )
+        return Response(
+            {"suggestions": suggest_transfer_requirements(patient=patient)}
         )
 
     @action(detail=True, methods=["post"])
