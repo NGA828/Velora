@@ -100,6 +100,9 @@ small { font-size: 0.8rem; }
 .password-card form { margin-top: 24px; }
 
 .hospital-shell { min-height: 100vh; }
+/* Mobile-only chrome: hidden on desktop, activated inside the ≤760px media query. */
+.mobile-topbar { display: none; }
+.nav-scrim { display: none; }
 .sidebar { position: fixed; z-index: 30; inset: 0 auto 0 0; width: var(--sidebar-width); display: flex; flex-direction: column; padding: 24px 16px 16px; border-right: 1px solid var(--color-border); background: #fbfcfd; }
 .sidebar__brand { padding: 0 10px 24px; }
 .sidebar__context { display: flex; flex-direction: column; margin: 0 8px 22px; padding: 13px 14px; border: 1px solid #d7e5e9; border-radius: 11px; background: var(--color-primary-soft); }
@@ -871,6 +874,32 @@ small { font-size: 0.8rem; }
   .invoice-card > header { align-items: flex-start; flex-direction: column; }
   .invoice-totals { justify-content: flex-start; }
   .invoice-card > footer { align-items: stretch; flex-direction: column; }
+}
+
+/* Mobile polish: touch-friendly inputs, stacking panels, full-width actions. */
+@media (max-width: 760px) {
+  .form-field input, .form-field select, .form-field textarea, .message-composer input[type="text"], .message-composer input:not([type]) { font-size: 16px; }
+  .tabs__tab { min-height: 44px; }
+  body:has(.sidebar--open) { overflow: hidden; }
+  .patient-identity-card__main { flex-wrap: wrap; }
+  .patient-identity-card__main .vital-score { margin-left: 0; flex-basis: 100%; }
+  .attachment-upload { align-items: stretch; flex-direction: column; }
+  .attachment-upload .button { width: 100%; }
+  .guardian-count { grid-template-columns: auto 1fr; }
+  .section-panel__heading { align-items: flex-start; flex-direction: column; }
+  .section-panel__heading .button { align-self: flex-start; }
+  .profile-card__actions { flex-wrap: wrap; }
+  .profile-card__actions .button { flex: 1 1 auto; justify-content: center; }
+  .shell-alert { align-items: stretch; flex-direction: column; }
+  .shell-alert .button { align-self: flex-end; }
+  .dose-card__content > div:first-child { flex-wrap: wrap; }
+  .requirement-actions { align-items: stretch; flex-direction: column; }
+  .requirement-actions .button { width: 100%; justify-content: center; }
+  .call-overlay__actions { width: 100%; }
+  .call-overlay__actions .button { flex: 1; min-width: 0; }
+  .modal { padding-bottom: env(safe-area-inset-bottom); }
+  .sidebar { padding-top: 80px; }
+  .sidebar__brand { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
