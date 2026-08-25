@@ -338,7 +338,65 @@ describe('callManager outgoing calls', () => {
     await vi.waitFor(() => {
       expect(lastPC()?.remoteDescription?.sdp).toBe('server-answer-sdp')
     })
+    // The caller leaves "Ringing…" and reflects the connected call.
+    expect(callManager.getSnapshot().phase).toBe('active')
     expect(getCall).toHaveBeenCalledWith('s6')
+  })
+
+  it('leaves "ringing" and recovers the answer when BOTH realtime events were missed but the poll sees IN_PROGRESS', async () => {
+    // The callee answered on the server (status IN_PROGRESS + persisted
+    // answer), but the caller's realtime `call.signal` (answer) AND
+    // `call.updated` (IN_PROGRESS) events never arrived — e.g. the socket
+    // reconnected or the page was on another route. The background poll is
+    // the safety net: it must move the caller out of "ringing" and apply the
+    // server answer so the two can actually communicate.
+    const created = makeSession({ id: 's7', initiated_by: 'me', status: 'QUEUED' })
+    vi.mocked(createCall).mockResolvedValue(created)
+    const answered = makeSession({
+      id: 's7',
+      initiated_by: 'me',
+      status: 'IN_PROGRESS',
+      answer_sdp: 'server-answer-sdp',
+      answer_from: 'them',
+    })
+    vi.mocked(getCalls).mockResolvedValue([answered])
+    vi.mocked(getCall).mockResolvedValue(answered)
+
+    await callManager.startCall('them')
+    expect(callManager.getSnapshot().phase).toBe('ringing')
+
+    callManager.startPolling()
+    try {
+      await vi.waitFor(() => {
+        expect(callManager.getSnapshot().phase).toBe('active')
+      })
+    } finally {
+      callManager.stopPolling()
+    }
+    // The caller applied the server-persisted answer so media can connect.
+    expect(getCall).toHaveBeenCalledWith('s7')
+    expect(lastPC()?.remoteDescription?.sdp).toBe('server-answer-sdp')
+  })
+
+  it('connects and leaves "ringing" when the callee answer signal arrives over realtime', async () => {
+    const created = makeSession({ id: 's8', initiated_by: 'me', status: 'QUEUED' })
+    vi.mocked(createCall).mockResolvedValue(created)
+    await callManager.startCall('them')
+    expect(callManager.getSnapshot().phase).toBe('ringing')
+
+    callManager.handleRealtimeEvent({
+      type: 'call.signal',
+      payload: {
+        call_session_id: 's8',
+        from_user: 'them',
+        data: { type: 'answer', sdp: 'callee-answer-sdp' },
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(callManager.getSnapshot().phase).not.toBe('ringing')
+    })
+    expect(lastPC()?.remoteDescription?.sdp).toBe('callee-answer-sdp')
   })
 
   it('shows a clear busy message when the recipient is already in a call', async () => {
