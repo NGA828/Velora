@@ -1,7 +1,8 @@
 from .configuration import VitalMetric, VitalRule, VitalRuleSet
-from .observations import VitalObservation, VitalRuleEvaluation, VitalValue
+from .observations import IcuRecommendation, VitalObservation, VitalRuleEvaluation, VitalValue
 
 __all__ = [
+    "IcuRecommendation",
     "VitalMetric",
     "VitalObservation",
     "VitalRule",
@@ -9,3 +10,4 @@ __all__ = [
     "VitalRuleSet",
     "VitalValue",
 ]
+

@@ -7,7 +7,7 @@ import { SessionGate } from './guards/SessionGate'
 import { HospitalShell } from './layouts/HospitalShell'
 import { WorkspaceHomePage } from './WorkspaceHomePage'
 
-export const router = createBrowserRouter([
+export const createAppRouter = () => createBrowserRouter([
   {
     path: '/login',
     lazy: async () => ({
@@ -386,3 +386,5 @@ export const router = createBrowserRouter([
   },
   { path: '*', element: <NotFoundPage /> },
 ])
+
+export const router = createAppRouter()

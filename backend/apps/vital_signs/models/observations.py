@@ -134,3 +134,24 @@ class VitalRuleEvaluation(UUIDTimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.rule_name_snapshot}: {'matched' if self.matched else 'not matched'}"
+
+
+class IcuRecommendation(UUIDTimeStampedModel):
+    observation = models.OneToOneField(
+        VitalObservation,
+        on_delete=models.PROTECT,
+        related_name="icu_recommendation",
+    )
+    eligible = models.BooleanField(default=False)
+    score = models.PositiveSmallIntegerField(default=0)
+    specialist_status = models.CharField(max_length=120)
+    icu_bed_status = models.CharField(max_length=120)
+    explanation = models.TextField()
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-generated_at"]
+
+    def __str__(self) -> str:
+        return f"ICU Recommendation for {self.observation}"
+

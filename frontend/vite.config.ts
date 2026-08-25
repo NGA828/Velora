@@ -6,6 +6,20 @@ export default defineConfig({
     skipWebSocketTokenCheck: true,
   },
   plugins: [react()],
+  optimizeDeps: {
+    // Pre-bundle these so the dependency optimizer does not re-run (and change
+    // its ?v= cache-busting hash) on routine edits, which otherwise leaves the
+    // browser holding stale /node_modules/.vite/deps URLs behind a blank screen.
+    include: [
+      'react-router-dom',
+      '@tanstack/react-query',
+      'axios',
+      'zod',
+      'react-hook-form',
+      '@hookform/resolvers',
+      'lucide-react',
+    ],
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

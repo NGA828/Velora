@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.vital_signs.models import (
+    IcuRecommendation,
     VitalMetric,
     VitalObservation,
     VitalRuleEvaluation,
@@ -56,11 +57,26 @@ class VitalValueSerializer(serializers.ModelSerializer):
         return any(evaluation.matched for evaluation in obj.evaluations.all())
 
 
+class IcuRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IcuRecommendation
+        fields = (
+            "id",
+            "eligible",
+            "score",
+            "specialist_status",
+            "icu_bed_status",
+            "explanation",
+            "generated_at",
+        )
+
+
 class VitalObservationSerializer(serializers.ModelSerializer):
     patient_name = serializers.CharField(source="patient.get_full_name", read_only=True)
     recorded_by_name = serializers.CharField(source="recorded_by.get_full_name", read_only=True)
     values = VitalValueSerializer(many=True, read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    icu_recommendation = IcuRecommendationSerializer(read_only=True)
 
     class Meta:
         model = VitalObservation
@@ -82,6 +98,7 @@ class VitalObservationSerializer(serializers.ModelSerializer):
             "rule_set_name_snapshot",
             "rule_set_version_snapshot",
             "values",
+            "icu_recommendation",
             "created_at",
         )
 

@@ -10,6 +10,7 @@ from apps.notifications.models import Notification
 from apps.notifications.services import notify
 from apps.patients.models import CareEpisode, Patient, PatientCareAssignment
 from apps.vital_signs.models import (
+    IcuRecommendation,
     VitalObservation,
     VitalRule,
     VitalRuleEvaluation,
@@ -170,6 +171,8 @@ def record_and_analyze_observation(
         ]
     )
 
+    generate_icu_recommendation(observation=observation, patient=patient)
+
     if status == VitalObservation.Status.CRITICAL:
         doctor_assignments = PatientCareAssignment.objects.filter(
             patient=patient,
@@ -211,3 +214,112 @@ def _audit_observation(*, observation, actor, request=None) -> None:
             "observed_at": observation.observed_at.isoformat(),
         },
     )
+
+
+def generate_icu_recommendation(*, observation: VitalObservation, patient: Patient) -> IcuRecommendation:
+    from apps.hospital.models import Bed
+
+    # 1. Evaluate Specialist presence / absence
+    active_episode = patient.care_episodes.filter(status="ACTIVE").first()
+    department = active_episode.department if active_episode else None
+
+    specialist_assigned = False
+    specialist_overloaded = False
+    primary_doctor = None
+
+    # Find primary doctor assignment for this patient
+    doctor_assignment = PatientCareAssignment.objects.filter(
+        patient=patient,
+        assignment_type=PatientCareAssignment.AssignmentType.DOCTOR,
+        ends_at__isnull=True,
+    ).select_related("staff__user").first()
+
+    if doctor_assignment:
+        primary_doctor = doctor_assignment.staff.user
+        # Check primary doctor's active assignments load
+        active_assignments_count = PatientCareAssignment.objects.filter(
+            staff__user=primary_doctor,
+            assignment_type=PatientCareAssignment.AssignmentType.DOCTOR,
+            ends_at__isnull=True,
+        ).count()
+        if active_assignments_count > 5:
+            specialist_overloaded = True
+
+    # Also check if any doctors are assigned in the active department
+    if department:
+        department_doctors_count = PatientCareAssignment.objects.filter(
+            patient__care_episodes__department=department,
+            patient__care_episodes__status="ACTIVE",
+            assignment_type=PatientCareAssignment.AssignmentType.DOCTOR,
+            ends_at__isnull=True,
+        ).values("staff").distinct().count()
+        if department_doctors_count > 0:
+            specialist_assigned = True
+    else:
+        # If no department, just fallback to check if primary doctor is assigned
+        specialist_assigned = doctor_assignment is not None
+
+    if not specialist_assigned:
+        specialist_status = "ABSENT"
+        specialist_explanation = "No specialist physician is currently assigned to this department."
+    elif specialist_overloaded:
+        specialist_status = "OVERLOADED"
+        specialist_explanation = f"Primary specialist {primary_doctor.get_full_name()} is overloaded with > 5 active assignments."
+    else:
+        specialist_status = "AVAILABLE"
+        specialist_explanation = "Specialist physician is assigned and available."
+
+    # 2. Evaluate ICU Bed availability
+    icu_beds = Bed.objects.filter(room__room_type__icontains="ICU")
+    total_icu_beds = icu_beds.count()
+    occupied_icu_beds = icu_beds.filter(status=Bed.Status.OCCUPIED).count()
+
+    if total_icu_beds == 0:
+        icu_bed_status = "UNAVAILABLE"
+        bed_explanation = "No ICU beds are configured in the facility."
+    elif occupied_icu_beds >= total_icu_beds:
+        icu_bed_status = "OVERLOADED"
+        bed_explanation = f"ICU beds are at 100% capacity ({occupied_icu_beds}/{total_icu_beds} occupied)."
+    else:
+        icu_bed_status = "AVAILABLE"
+        bed_explanation = f"ICU beds are available ({total_icu_beds - occupied_icu_beds} of {total_icu_beds} free)."
+
+    # 3. Calculate overall eligibility and score
+    eligible = observation.status == VitalObservation.Status.CRITICAL
+
+    # Calculate score
+    score = 100
+    if specialist_status == "ABSENT":
+        score -= 50
+    elif specialist_status == "OVERLOADED":
+        score -= 25
+
+    if icu_bed_status == "UNAVAILABLE":
+        score -= 50
+    elif icu_bed_status == "OVERLOADED":
+        score -= 30
+
+    score = max(0, score)
+
+    # Explanation text
+    explanations = [
+        f"ICU Candidacy evaluated: patient status is {observation.status}.",
+        specialist_explanation,
+        bed_explanation,
+    ]
+    if eligible:
+        if specialist_status in {"ABSENT", "OVERLOADED"} or icu_bed_status in {"UNAVAILABLE", "OVERLOADED"}:
+            explanations.append("Local resource constraints detected. Consider initiating external transfer.")
+        else:
+            explanations.append("Local resources are adequate for immediate ICU admission.")
+    explanation_text = " ".join(explanations)
+
+    return IcuRecommendation.objects.create(
+        observation=observation,
+        eligible=eligible,
+        score=score,
+        specialist_status=specialist_status,
+        icu_bed_status=icu_bed_status,
+        explanation=explanation_text,
+    )
+
