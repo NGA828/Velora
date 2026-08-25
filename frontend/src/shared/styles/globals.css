@@ -516,6 +516,51 @@ small { font-size: 0.8rem; }
 .evaluation-explanations small { display: block; color: var(--color-muted); }
 .observation-notes { color: #43525d; }
 .vital-observation > footer { padding: 12px 22px; border-top: 1px solid var(--color-border); color: var(--color-muted); font-size: .7rem; }
+.icu-inline { margin: 18px 22px; padding: 15px; border: 1px solid #bcd7e2; border-radius: 12px; background: #f2f8fb; }
+.icu-inline > strong { display: flex; align-items: center; gap: 7px; color: #12566d; font-size: .86rem; }
+.icu-inline__factors { display: flex; flex-wrap: wrap; gap: 8px; margin: 11px 0 9px; }
+.icu-inline p { margin: 0; color: #43525d; font-size: .8rem; }
+.icu-chip { padding: 4px 10px; border-radius: 999px; background: var(--color-surface-subtle); color: var(--color-muted); font-size: .72rem; font-weight: 600; }
+.icu-chip--eligible { background: var(--color-success-soft); color: var(--color-success); }
+.icu-chip--available { background: var(--color-success-soft); color: var(--color-success); }
+.icu-chip--overloaded { background: #fff4de; color: var(--color-warning); }
+.icu-chip--absent, .icu-chip--unavailable { background: var(--color-critical-soft); color: var(--color-critical); }
+
+/* ICU AI recommendation feed */
+.icu-recs { display: grid; gap: 16px; }
+.icu-card { overflow: hidden; border: 1px solid var(--color-border); border-radius: 16px; background: white; box-shadow: var(--shadow-sm); }
+.icu-card__header { display: flex; align-items: center; gap: 13px; padding: 18px 22px; border-bottom: 1px solid var(--color-border); background: #fbfcfd; }
+.icu-card__icon { width: 42px; height: 42px; display: grid; place-items: center; flex: none; border-radius: 12px; color: var(--color-primary); background: var(--color-primary-soft); }
+.icu-card__header > div { flex: 1; min-width: 0; }
+.icu-card__header h3 { margin: 0; font-size: 1rem; }
+.icu-card__header p { display: flex; align-items: center; gap: 6px; margin: 3px 0 0; color: var(--color-muted); font-size: .75rem; }
+.icu-badge { flex: none; padding: 6px 12px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+.icu-badge--eligible { background: var(--color-critical-soft); color: var(--color-critical); }
+.icu-badge--not-eligible { background: var(--color-surface-subtle); color: var(--color-muted); }
+.icu-card__score { display: flex; align-items: center; gap: 18px; padding: 18px 22px 6px; }
+.icu-card__score > div:first-child { display: flex; align-items: baseline; gap: 8px; flex: none; }
+.icu-card__score strong { font-size: 1.6rem; letter-spacing: -.03em; color: #12566d; }
+.icu-card__score small { color: var(--color-muted); }
+.icu-card__score-track { flex: 1; height: 9px; overflow: hidden; border-radius: 999px; background: var(--color-surface-subtle); }
+.icu-card__score-track span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--color-success), var(--color-warning) 60%, var(--color-critical)); }
+.icu-card__factors { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; padding: 14px 22px; }
+.icu-factor { display: flex; gap: 11px; padding: 12px 14px; border: 1px solid var(--color-border); border-radius: 12px; background: #fbfcfd; }
+.icu-factor--good { border-color: #b8dccd; background: #f4faf7; }
+.icu-factor--warn { border-color: #ecd09f; background: #fffaf0; }
+.icu-factor--bad { border-color: #e7adb4; background: #fff5f6; }
+.icu-factor svg { flex: none; margin-top: 2px; color: var(--color-muted); }
+.icu-factor--good svg { color: var(--color-success); }
+.icu-factor--warn svg { color: var(--color-warning); }
+.icu-factor--bad svg { color: var(--color-critical); }
+.icu-factor > span { display: flex; flex-direction: column; gap: 2px; }
+.icu-factor strong { font-size: .8rem; }
+.icu-factor small { color: var(--color-muted); font-size: .72rem; }
+.icu-card__explanation { margin: 0; padding: 4px 22px 16px; color: #43525d; font-size: .82rem; line-height: 1.55; }
+.icu-card__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; border-top: 1px solid var(--color-border); color: var(--color-muted); font-size: .72rem; }
+.icu-card__footer span { display: flex; align-items: center; gap: 6px; }
+.icu-card__footer a { color: var(--color-primary); font-weight: 600; text-decoration: none; }
+.icu-card__footer a:hover { text-decoration: underline; }
+.icu-notice { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--color-muted); font-size: .72rem; }
 .table-footer-note { padding: 13px 0 5px; color: var(--color-muted); font-size: .75rem; }
 .notification-list { display: grid; gap: 10px; }
 .notification-item { display: flex; gap: 13px; padding: 18px; border: 1px solid var(--color-border); border-radius: 12px; background: white; box-shadow: var(--shadow-sm); }

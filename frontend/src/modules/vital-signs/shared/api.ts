@@ -9,6 +9,9 @@ export async function getVitalMetrics(): Promise<VitalMetric[]> {
 export async function getVitalObservations(patient: string): Promise<VitalObservation[]> {
   return (await apiClient.get<PaginatedResponse<VitalObservation>>('/vital-observations/', { params: { patient, page_size: 100 } })).data.data
 }
+export async function getIcuRecommendations(): Promise<VitalObservation[]> {
+  return (await apiClient.get<PaginatedResponse<VitalObservation>>('/vital-observations/icu-recommendations/', { params: { page_size: 100 } })).data.data
+}
 export async function createVitalObservation(payload: unknown): Promise<VitalObservation> {
   await prepareCsrf()
   return (await apiClient.post<VitalObservation>('/vital-observations/', payload)).data

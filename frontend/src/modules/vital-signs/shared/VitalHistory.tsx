@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Activity, AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react'
+import { Activity, AlertTriangle, BrainCircuit, CheckCircle2, HelpCircle } from 'lucide-react'
 
 import { Alert } from '../../../shared/ui/feedback/Alert'
 import { EmptyState } from '../../../shared/ui/feedback/EmptyState'
@@ -84,6 +84,25 @@ export function VitalHistory({ patientId }: { patientId: string }) {
                     </small>
                   </p>
                 ))}
+              </div>
+            )}
+            {observation.icu_recommendation && (
+              <div className="icu-inline">
+                <strong>
+                  <BrainCircuit size={16} /> AI ICU recommendation
+                </strong>
+                <div className="icu-inline__factors">
+                  <span className={observation.icu_recommendation.eligible ? 'icu-chip icu-chip--eligible' : 'icu-chip'}>
+                    {observation.icu_recommendation.eligible ? 'ICU admission recommended' : 'ICU admission not recommended'}
+                  </span>
+                  <span className={`icu-chip icu-chip--${observation.icu_recommendation.specialist_status.toLowerCase()}`}>
+                    Specialist: {observation.icu_recommendation.specialist_status.replace('_', ' ').toLowerCase()}
+                  </span>
+                  <span className={`icu-chip icu-chip--${observation.icu_recommendation.icu_bed_status.toLowerCase()}`}>
+                    ICU beds: {observation.icu_recommendation.icu_bed_status.replace('_', ' ').toLowerCase()}
+                  </span>
+                </div>
+                <p>{observation.icu_recommendation.explanation}</p>
               </div>
             )}
             {observation.notes && (

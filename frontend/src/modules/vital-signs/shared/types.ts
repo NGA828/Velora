@@ -32,6 +32,15 @@ export interface VitalValue {
   is_critical: boolean
   evaluations: RuleEvaluation[]
 }
+export interface IcuRecommendation {
+  id: string
+  eligible: boolean
+  score: number
+  specialist_status: 'AVAILABLE' | 'OVERLOADED' | 'ABSENT'
+  icu_bed_status: 'AVAILABLE' | 'OVERLOADED' | 'UNAVAILABLE'
+  explanation: string
+  generated_at: string
+}
 export interface VitalObservation {
   id: string
   patient: string
@@ -50,5 +59,6 @@ export interface VitalObservation {
   rule_set_name_snapshot: string
   rule_set_version_snapshot: number | null
   values: VitalValue[]
+  icu_recommendation: IcuRecommendation | null
   created_at: string
 }

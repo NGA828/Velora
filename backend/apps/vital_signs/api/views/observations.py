@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Prefetch
 from rest_framework import serializers, status
+from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
@@ -38,7 +39,7 @@ class VitalObservationViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
         )
         queryset = (
             VitalObservation.objects.filter(patient__in=patients_visible_to(self.request.user))
-            .select_related("patient", "care_episode", "recorded_by", "rule_set")
+            .select_related("patient", "care_episode", "recorded_by", "rule_set", "icu_recommendation")
             .prefetch_related(Prefetch("values", queryset=values))
         )
         patient = self.request.query_params.get("patient")
@@ -48,6 +49,21 @@ class VitalObservationViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
         if observation_status:
             queryset = queryset.filter(status=observation_status)
         return queryset
+
+    @action(detail=False, methods=["get"], url_path="icu-recommendations")
+    def icu_recommendations(self, request, *args, **kwargs):
+        """Feed of AI decision-support recommendations for the caller's visible
+        patients, newest first — the surface where clinicians see the ICU
+        recommendation system's output."""
+        queryset = self.get_queryset().filter(icu_recommendation__isnull=False).order_by(
+            "-icu_recommendation__generated_at"
+        )
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(
+                self.get_serializer(page, many=True).data
+            )
+        return Response(self.get_serializer(queryset, many=True).data)
 
     def create(self, request, *args, **kwargs):
         if request.user.role != UserRole.NURSE:

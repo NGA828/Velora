@@ -165,6 +165,12 @@ export const createAppRouter = () => createBrowserRouter([
                     }),
                   },
                   {
+                    path: '/doctor/icu-recommendations',
+                    lazy: async () => ({
+                      Component: (await import('../modules/doctor/icu-recommendations/DoctorIcuRecommendationsPage')).DoctorIcuRecommendationsPage,
+                    }),
+                  },
+                  {
                     path: '/doctor/transfers',
                     lazy: async () => ({
                       Component: (await import('../modules/doctor/transfers/DoctorTransfersPage')).DoctorTransfersPage,
@@ -233,6 +239,12 @@ export const createAppRouter = () => createBrowserRouter([
                     path: '/nurse/patient-guards',
                     lazy: async () => ({
                       Component: (await import('../modules/nurse/patient-guards/PatientGuardsPage')).PatientGuardsPage,
+                    }),
+                  },
+                  {
+                    path: '/nurse/icu-recommendations',
+                    lazy: async () => ({
+                      Component: (await import('../modules/nurse/icu-recommendations/NurseIcuRecommendationsPage')).NurseIcuRecommendationsPage,
                     }),
                   },
                 ],

@@ -139,3 +139,44 @@ def test_icu_recommendation_icu_bed_overloaded():
     assert rec.eligible is True
     assert rec.icu_bed_status == "OVERLOADED"
     assert "ICU beds are at 100% capacity" in rec.explanation
+
+
+@pytest.mark.django_db
+def test_icu_recommendations_feed_exposes_latest_recommendations_to_doctor():
+    doctor, doc_profile, nurse, patient, metric = setup_icu_patient()
+    nurse_client = APIClient()
+    nurse_client.force_authenticate(nurse)
+    recorded = nurse_client.post(
+        reverse("vital_signs:vital-observation-list"),
+        {
+            "patient": str(patient.id),
+            "values": [{"metric": str(metric.id), "value": "39.0"}],
+        },
+        format="json",
+    )
+    assert recorded.status_code == 201
+
+    doctor_client = APIClient()
+    doctor_client.force_authenticate(doctor)
+    feed = doctor_client.get(reverse("vital_signs:vital-observation-icu-recommendations"))
+    assert feed.status_code == 200
+    items = feed.json()["data"]
+    assert len(items) == 1
+    recommendation = items[0]["icu_recommendation"]
+    assert recommendation is not None
+    assert recommendation["eligible"] is True
+    assert recommendation["specialist_status"] in {"AVAILABLE", "OVERLOADED", "ABSENT"}
+    assert recommendation["icu_bed_status"] in {"AVAILABLE", "OVERLOADED", "UNAVAILABLE"}
+    assert recommendation["explanation"]
+    assert recommendation["generated_at"]
+    assert items[0]["patient_name"] == patient.get_full_name()
+
+    # A doctor who cannot see the patient gets an empty feed.
+    other_doctor, _ = create_staff(
+        role=UserRole.DOCTOR, email="other_doc@example.org", employee_number="DOC-OTHER-001"
+    )
+    other_client = APIClient()
+    other_client.force_authenticate(other_doctor)
+    other_feed = other_client.get(reverse("vital_signs:vital-observation-icu-recommendations"))
+    assert other_feed.status_code == 200
+    assert other_feed.json()["data"] == []

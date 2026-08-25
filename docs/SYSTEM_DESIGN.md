@@ -767,6 +767,7 @@ Legend: **Manage** = create/read/update through valid transitions; **Scoped** = 
 - One active call per participant: initiating while either side is already in a `QUEUED`/`RINGING`/`IN_PROGRESS` session is rejected with `409 call_busy`. Two people calling each other at the same moment are serialized (user-row locks, stable order) — the earlier session wins and the later caller gets a busy message, WhatsApp-style.
 - Missed calls notify: an unanswered ring is marked `NO_ANSWER` (callee app ring timeout, plus a server-side safety net that expires stale `QUEUED`/`RINGING` sessions on list) and creates a persistent, deduped `calls.missed` notification for the callee.
 - Users notice notifications without visiting the center: live unread badge on the sidebar bell and clickable toasts on any page when a `notification.created` realtime event arrives.
+- ICU AI decision support: `IcuRecommendation` is generated with each vital observation (specialist availability/overload, ICU bed capacity, criticality → eligibility, readiness score, plain-language explanation). `GET /vital-observations/icu-recommendations/` feeds the Doctor/Nurse "ICU recommendations" pages, and each observation embeds its recommendation for display in vital history.
 
 ### Notifications — `/notifications`
 
