@@ -49,3 +49,26 @@ export async function changePassword(input: ChangePasswordInput): Promise<Sessio
   const response = await apiClient.post<SessionResponse>('/auth/password/change/', input)
   return response.data
 }
+
+export interface ProfileUpdateInput {
+  first_name?: string
+  last_name?: string
+  phone?: string
+  /** New profile picture file (optional). */
+  avatar?: File | null
+}
+
+/** Update the signed-in user's own profile details and picture. */
+export async function updateProfile(input: ProfileUpdateInput): Promise<SessionResponse> {
+  await prepareCsrf()
+  const data = new FormData()
+  if (input.first_name !== undefined) data.set('first_name', input.first_name)
+  if (input.last_name !== undefined) data.set('last_name', input.last_name)
+  if (input.phone !== undefined) data.set('phone', input.phone)
+  if (input.avatar !== undefined) {
+    if (input.avatar) data.set('avatar', input.avatar)
+    else data.set('avatar', '')
+  }
+  const response = await apiClient.patch<SessionResponse>('/auth/me/', data)
+  return response.data
+}

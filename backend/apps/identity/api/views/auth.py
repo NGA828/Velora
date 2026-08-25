@@ -1,11 +1,13 @@
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.http import FileResponse, Http404
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from rest_framework import serializers, status
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,6 +17,7 @@ from apps.identity.api.serializers import (
     ChangePasswordSerializer,
     InvitationAcceptSerializer,
     LoginSerializer,
+    ProfileUpdateSerializer,
     SessionUserSerializer,
 )
 from apps.identity.models import LoginEvent, LoginOutcome, User
@@ -48,6 +51,54 @@ class SessionView(APIView):
 
     def get(self, request):
         return Response({"user": SessionUserSerializer(request.user).data})
+
+
+class MeView(APIView):
+    """View and update the signed-in user's own profile details (name, phone,
+    profile picture). Every user can edit their own information."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get(self, request):
+        return Response({"user": SessionUserSerializer(request.user).data})
+
+    @method_decorator(csrf_protect)
+    def patch(self, request):
+        serializer = ProfileUpdateSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        previous = {
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+            "phone": request.user.phone,
+            "had_avatar": bool(request.user.avatar),
+        }
+        serializer.save()
+        record_audit_event(
+            actor=request.user,
+            request=request,
+            action="identity.profile.updated",
+            object_type="identity.User",
+            object_id=request.user.id,
+            after={
+                "fields": sorted(serializer.validated_data.keys()),
+                "avatar_changed": "avatar" in serializer.validated_data
+                and bool(serializer.validated_data["avatar"]) != previous["had_avatar"],
+            },
+        )
+        return Response({"user": SessionUserSerializer(request.user).data})
+
+
+class MyAvatarView(APIView):
+    """Serves the signed-in user's profile picture behind session auth."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        avatar = request.user.avatar
+        if not avatar:
+            raise Http404("No profile picture uploaded.")
+        return FileResponse(avatar.open("rb"), content_type="image/jpeg" if not avatar.name.lower().endswith(".png") else "image/png")
 
 
 @method_decorator(csrf_protect, name="dispatch")

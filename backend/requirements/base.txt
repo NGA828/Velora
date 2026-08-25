@@ -5,3 +5,4 @@ channels>=4.2,<5
 uvicorn[standard]>=0.34,<1
 whitenoise>=6.9,<7
 twilio>=9.8,<10
+pillow==12.3.0

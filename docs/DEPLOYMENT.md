@@ -63,6 +63,19 @@ HOSPITAL_TIME_ZONE=Africa/Lagos
 
 Configure SMTP variables from `.env.example`. Secrets must be injected by the service manager or secret store, not committed to the repository.
 
+Email is used for: staff invitations, the authorized medical transfer package sent to the destination hospital (`transfers.medical_package.sent`), and the SMTP self-test below.
+
+- STARTTLS (default): `EMAIL_PORT=587`, `EMAIL_USE_TLS=true`, `EMAIL_USE_SSL=false`.
+- Implicit TLS: `EMAIL_PORT=465`, `EMAIL_USE_SSL=true` (STARTTLS is automatically disabled).
+- Locally, without SMTP credentials, `EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend` prints messages to the ASGI console instead of sending.
+
+Verify delivery after configuring credentials:
+
+```bash
+cd /srv/velora/backend
+../.venv/bin/python manage.py send_test_email you@example.org
+```
+
 ## ASGI process
 
 ```bash

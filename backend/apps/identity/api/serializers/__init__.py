@@ -1,4 +1,9 @@
-from .auth import ChangePasswordSerializer, LoginSerializer, SessionUserSerializer
+from .auth import (
+    ChangePasswordSerializer,
+    LoginSerializer,
+    ProfileUpdateSerializer,
+    SessionUserSerializer,
+)
 from .invitations import (
     InvitationAcceptSerializer,
     InvitationSerializer,
@@ -11,6 +16,7 @@ __all__ = [
     "InvitationAcceptSerializer",
     "InvitationSerializer",
     "LoginSerializer",
+    "ProfileUpdateSerializer",
     "SessionUserSerializer",
     "StaffInvitationCreateSerializer",
     "StaffProfileSerializer",

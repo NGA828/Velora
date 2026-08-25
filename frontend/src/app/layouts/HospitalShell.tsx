@@ -205,7 +205,13 @@ export function HospitalShell() {
           ))}
         </nav>
         <div className="sidebar__account">
-          <span className="avatar" aria-hidden="true">{initials}</span>
+          <span className="avatar" aria-hidden="true">
+            {user.avatar_url ? (
+              <img src={user.avatar_url} alt="" />
+            ) : (
+              initials
+            )}
+          </span>
           <span className="sidebar__account-copy">
             <strong>{user.full_name}</strong>
             <small>{user.email}</small>
