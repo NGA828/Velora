@@ -15,6 +15,7 @@ from apps.calls.api.serializers import (
 from apps.calls.models import CallSession
 from apps.calls.permissions import IsActiveUser
 from apps.calls.services import (
+    CallBusyError,
     cancel_call,
     initiate_call,
     signal_call,
@@ -39,6 +40,20 @@ def unavailable_response():
             }
         },
         status=status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
+
+
+def busy_response(message: str):
+    return Response(
+        {
+            "error": {
+                "code": "call_busy",
+                "message": message,
+                "fields": {},
+                "request_id": None,
+            }
+        },
+        status=status.HTTP_409_CONFLICT,
     )
 
 
@@ -100,6 +115,8 @@ class CallSessionViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
                 provider=serializer.validated_data["provider"],
                 request=request,
             )
+        except CallBusyError as exc:
+            return busy_response(str(exc))
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"detail": exc.messages}) from exc
         return Response(

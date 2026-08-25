@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -8,6 +9,13 @@ from apps.messaging.realtime import publish_user_event
 from apps.messaging.selectors import users_may_communicate
 from integrations.twilio.config import get_twilio_settings
 from integrations.twilio.tokens import twilio_identity
+
+User = get_user_model()
+
+
+class CallBusyError(Exception):
+    """Raised when a call cannot be initiated because either participant is
+    already engaged in another call (including a simultaneous same-pair call)."""
 
 
 @transaction.atomic
@@ -26,6 +34,38 @@ def initiate_call(*, caller, recipient, conversation=None, request=None, provide
         raise ValidationError("You are not a participant in this conversation.")
     if not users_may_communicate(first=caller, second=recipient, patient=patient):
         raise ValidationError("You are not authorized to call this user.")
+    # A participant can be in only one call at a time. Lock both user rows in a
+    # stable order so two people calling each other at the same moment are
+    # serialized: the earlier session wins and the later caller is told the
+    # contact is busy (WhatsApp-style) instead of two parallel sessions ringing
+    # at once.
+    list(
+        User.objects.select_for_update()
+        .filter(pk__in=[caller.pk, recipient.pk])
+        .order_by("pk")
+    )
+    active_statuses = {
+        CallSession.Status.QUEUED,
+        CallSession.Status.RINGING,
+        CallSession.Status.IN_PROGRESS,
+    }
+    active_sessions = CallSession.objects.filter(
+        participants__user__in=[caller.pk, recipient.pk],
+        status__in=active_statuses,
+    ).distinct()
+    for session in active_sessions:
+        participant_ids = set(session.participants.values_list("user_id", flat=True))
+        if caller.pk in participant_ids and recipient.pk in participant_ids:
+            if session.initiated_by_id == caller.pk:
+                raise CallBusyError(
+                    "You already have a call with this contact. Answer it or wait for it to end."
+                )
+            raise CallBusyError(
+                "This contact is calling you. Answer the incoming call instead of placing a new one."
+            )
+        if caller.pk in participant_ids:
+            raise CallBusyError("You already have an active call. End it before starting another.")
+        raise CallBusyError("The contact is currently in another call. Try again shortly.")
     now = timezone.now()
     session = CallSession.objects.create(
         conversation=conversation,

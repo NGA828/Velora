@@ -8,6 +8,7 @@ import {
   updateCallStatus,
 } from '../../modules/communication/shared/api'
 import type { CallSession } from '../../modules/communication/shared/types'
+import { AppApiError } from '../api/errors'
 import { callManager } from './callManager'
 
 vi.mock('../../modules/communication/shared/api', () => ({
@@ -313,5 +314,25 @@ describe('callManager outgoing calls', () => {
       expect(lastPC()?.remoteDescription?.sdp).toBe('server-answer-sdp')
     })
     expect(getCall).toHaveBeenCalledWith('s6')
+  })
+
+  it('shows a clear busy message when the recipient is already in a call', async () => {
+    // Two people called each other at the same moment: the backend rejected
+    // this initiation with 409 call_busy because the earlier session won.
+    vi.mocked(createCall).mockRejectedValue(
+      new AppApiError({
+        message: 'This contact is calling you. Answer the incoming call instead of placing a new one.',
+        status: 409,
+        code: 'call_busy',
+      }),
+    )
+
+    await callManager.startCall('them')
+
+    const state = callManager.getSnapshot()
+    expect(state.error).toContain('Answer the incoming call')
+    expect(state.activeSession).toBeNull()
+    expect(state.phase).toBe('idle')
+    expect(state.starting).toBe(false)
   })
 })

@@ -135,3 +135,113 @@ def test_webrtc_offer_and_answer_are_persisted_for_late_accept():
     assert detail.json()["answer_sdp"] == answer
     assert detail.json()["answer_from"] == str(nurse.id)
     assert detail.json()["offer_sdp"] == offer
+
+
+@pytest.mark.django_db
+def test_simultaneous_calls_between_same_pair_are_serialized():
+    """Two people calling each other at the same moment must not create two
+    parallel sessions: the earlier session wins and the later caller gets a
+    clear busy response (WhatsApp-style)."""
+    doctor, nurse, _, _, _ = monitoring_context()
+    doctor_client = APIClient()
+    doctor_client.force_authenticate(doctor)
+    created = doctor_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    assert created.status_code == 201
+
+    # The nurse calls the doctor at the same time as the doctor called the nurse.
+    nurse_client = APIClient()
+    nurse_client.force_authenticate(nurse)
+    rejected = nurse_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(doctor.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "call_busy"
+    assert "calling you" in rejected.json()["error"]["message"]
+    # Exactly one session exists between the pair.
+    assert CallSession.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_caller_busy_when_already_in_another_call():
+    """A user who is already in a call cannot place a second one."""
+    doctor, nurse, guard, _, _ = monitoring_context()
+    doctor_client = APIClient()
+    doctor_client.force_authenticate(doctor)
+    created = doctor_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    assert created.status_code == 201
+
+    # The guard tries to call the doctor while the doctor is in a call.
+    guard_client = APIClient()
+    guard_client.force_authenticate(guard)
+    rejected = guard_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(doctor.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "call_busy"
+    assert "another call" in rejected.json()["error"]["message"]
+
+
+@pytest.mark.django_db
+def test_recipient_busy_when_in_another_call():
+    """Calling someone who is already in a call reports them as busy."""
+    doctor, nurse, guard, _, _ = monitoring_context()
+    doctor_client = APIClient()
+    doctor_client.force_authenticate(doctor)
+    created = doctor_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    assert created.status_code == 201
+
+    # The guard calls the nurse while the nurse is in a call with the doctor.
+    guard_client = APIClient()
+    guard_client.force_authenticate(guard)
+    rejected = guard_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "call_busy"
+    assert "currently in another call" in rejected.json()["error"]["message"]
+    assert CallSession.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_busy_rule_relaxes_once_the_call_ends():
+    """After the active call finishes, the same pair can call again."""
+    doctor, nurse, _, _, _ = monitoring_context()
+    doctor_client = APIClient()
+    doctor_client.force_authenticate(doctor)
+    created = doctor_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    session_id = created.json()["id"]
+    doctor_client.post(
+        reverse("calls:call-status", args=[session_id]),
+        {"status": "COMPLETED"},
+        format="json",
+    )
+
+    again = doctor_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    assert again.status_code == 201
+    assert CallSession.objects.count() == 2
