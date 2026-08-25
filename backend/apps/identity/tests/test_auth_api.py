@@ -1,5 +1,6 @@
 import pytest
 from django.urls import reverse
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
 from apps.audit.models import AuditEvent
@@ -110,3 +111,79 @@ def test_password_change_keeps_session_and_records_audit():
     assert user.check_password("A-new-foundation-passphrase-928!")
     assert client.get(reverse("identity:session")).status_code == 200
     assert AuditEvent.objects.filter(action="identity.password.changed", actor=user).exists()
+
+
+@pytest.mark.django_db
+def test_me_endpoint_updates_profile_and_avatar(monkeypatch, tmp_path):
+    from apps.identity.tests.factories import create_user
+
+    user = create_user(email="profile@example.org")
+    client = APIClient()
+    client.force_authenticate(user)
+
+    # Update name and phone without touching the avatar.
+    updated = client.patch(
+        reverse("identity:me"),
+        {"first_name": "Amara", "last_name": "Nwosu", "phone": "+237699000000"},
+        format="json",
+    )
+    assert updated.status_code == 200
+    assert updated.json()["user"]["first_name"] == "Amara"
+    assert updated.json()["user"]["last_name"] == "Nwosu"
+    assert updated.json()["user"]["phone"] == "+237699000000"
+    user.refresh_from_db()
+    assert user.first_name == "Amara"
+    assert user.phone == "+237699000000"
+
+    # Upload a small PNG avatar (multipart).
+    import io
+    import struct
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), color=(20, 40, 80)).save(buffer, format="PNG")
+    buffer.seek(0)
+    avatar = SimpleUploadedFile(
+        "profile.png", buffer.read(), content_type="image/png"
+    )
+    uploaded = client.patch(
+        reverse("identity:me"),
+        {"avatar": avatar},
+        format="multipart",
+    )
+    assert uploaded.status_code == 200
+    user.refresh_from_db()
+    assert user.avatar.name.startswith("avatars/")
+    assert uploaded.json()["user"]["avatar_url"] == reverse("identity:my-avatar")
+
+    # The avatar is served through the authenticated endpoint.
+    served = client.get(reverse("identity:my-avatar"))
+    assert served.status_code == 200
+    assert served["Content-Type"] == "image/png"
+
+    # A different user cannot read this avatar.
+    other = create_user(email="other-profile@example.org")
+    other_client = APIClient()
+    other_client.force_authenticate(other)
+    assert other_client.get(reverse("identity:my-avatar")).status_code == 404
+
+
+@pytest.mark.django_db
+def test_me_endpoint_rejects_blank_name_and_bad_avatar_type():
+    from apps.identity.tests.factories import create_user
+
+    user = create_user(email="profile2@example.org")
+    client = APIClient()
+    client.force_authenticate(user)
+
+    blank = client.patch(
+        reverse("identity:me"), {"first_name": "   "}, format="json"
+    )
+    assert blank.status_code == 400
+
+    bad = client.patch(
+        reverse("identity:me"),
+        {"avatar": SimpleUploadedFile("x.txt", b"not-an-image", content_type="text/plain")},
+        format="multipart",
+    )
+    assert bad.status_code == 400

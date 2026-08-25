@@ -194,6 +194,18 @@ class Command(BaseCommand):
         )
         Bed.objects.get_or_create(room=room, code="A")
         Bed.objects.get_or_create(room=room, code="B")
+        # Intensive care unit so the ICU decision-support system can evaluate
+        # bed capacity (AVAILABLE / OVERLOADED / UNAVAILABLE) in the demo.
+        icu_room, _ = Room.objects.get_or_create(
+            code="ICU-01",
+            defaults={
+                "department": department,
+                "floor": "First",
+                "room_type": "ICU",
+            },
+        )
+        for bed_code in ("ICU-A", "ICU-B", "ICU-C"):
+            Bed.objects.get_or_create(room=icu_room, code=bed_code)
         Resource.objects.get_or_create(
             asset_code="MON-001",
             defaults={

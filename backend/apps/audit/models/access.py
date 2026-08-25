@@ -10,6 +10,7 @@ class MedicalRecordAccess(UUIDTimeStampedModel):
         VIEW = "VIEW", "View"
         PRINT = "PRINT", "Print"
         DOWNLOAD = "DOWNLOAD", "Download"
+        ATTACH = "ATTACH", "Attach"
         TRANSMIT = "TRANSMIT", "Transmit"
 
     user = models.ForeignKey(

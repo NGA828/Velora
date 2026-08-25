@@ -177,6 +177,11 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "true").lower() == "true"
+# For providers that require implicit TLS on port 465 (e.g. some SMTP
+# services) instead of STARTTLS on 587.
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "false").lower() == "true"
+if EMAIL_USE_SSL:
+    EMAIL_USE_TLS = False
 
 LOGGING = {
     "version": 1,

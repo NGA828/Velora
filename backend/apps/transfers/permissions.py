@@ -8,11 +8,11 @@ class TransferPermission(BasePermission):
         user = request.user
         if not user or not user.is_authenticated or not user.is_active:
             return False
-        if request.method in SAFE_METHODS:
-            return user.role in {UserRole.DOCTOR, UserRole.PATIENT_GUARD}
         action = getattr(view, "action", None)
-        if action in {"create", "recommend", "submit", "send_package"}:
+        if action in {"create", "recommend", "submit", "send_package", "suggest_requirements"}:
             return user.role == UserRole.DOCTOR
         if action == "decide":
             return user.role == UserRole.PATIENT_GUARD
+        if request.method in SAFE_METHODS:
+            return user.role in {UserRole.DOCTOR, UserRole.PATIENT_GUARD}
         return False

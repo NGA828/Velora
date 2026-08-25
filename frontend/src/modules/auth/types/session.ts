@@ -13,6 +13,7 @@ export interface SessionUser {
   last_name: string
   full_name: string
   phone: string
+  avatar_url: string | null
   role: UserRole
   role_label: string
   capabilities: string[]

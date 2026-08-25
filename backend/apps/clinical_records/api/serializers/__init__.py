@@ -1,4 +1,4 @@
-from .files import MedicalFileSerializer
+from .files import MedicalFileAttachmentSerializer, MedicalFileSerializer
 from .records import (
     AllergySerializer,
     ClinicalNoteSerializer,
@@ -11,6 +11,7 @@ __all__ = [
     "AllergySerializer",
     "ClinicalNoteSerializer",
     "DiagnosisSerializer",
+    "MedicalFileAttachmentSerializer",
     "MedicalFileSerializer",
     "MedicalHistoryEntrySerializer",
     "TreatmentPlanSerializer",

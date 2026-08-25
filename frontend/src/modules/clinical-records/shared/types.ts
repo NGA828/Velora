@@ -6,3 +6,4 @@ export interface TreatmentPlan { id: string; patient: string; care_episode: stri
 export interface ClinicalNote { id: string; patient: string; care_episode: string | null; note_type: string; note_type_label: string; title: string; body: string; status: string; signed_at: string | null; author_name: string; amends: string | null; guardian_visibility: GuardianVisibility; created_at: string }
 export interface ClinicalCondition { id: string; code: string; name: string; coding_system: string; is_active: boolean }
 export interface ClinicalRecordBundle { allergies: Allergy[]; history: HistoryEntry[]; diagnoses: Diagnosis[]; treatmentPlans: TreatmentPlan[]; notes: ClinicalNote[] }
+export interface MedicalFileAttachment { id: string; patient: string; original_name: string; mime_type: string; byte_size: number; checksum: string; description: string; uploaded_by_name: string; uploaded_at: string; download_url: string }

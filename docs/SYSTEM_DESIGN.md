@@ -48,7 +48,7 @@ Prescriptions become visible to the authorized guard and generate concrete sched
 
 Monitoring is modeled as a persistent clinical conversation. A Doctor opens a monitoring thread and asks typed questions. The linked Patient Guard responds; responses are append-only or supersede an earlier response so history is not erased. The Doctor is notified and may continue with new questions.
 
-For transfer, the Doctor declares clinical requirements instead of asking an opaque algorithm for a result. A rule-based service compares required specialties and services with active external-hospital capabilities, produces a ranked explanation, and stores the recommendation snapshot. The Doctor selects a destination and submits the request to a designated Patient Guard. Only after approval can the Doctor transmit an authorized medical-file package through SMTP. Every decision and transmission attempt is auditable.
+For transfer, the Doctor declares clinical requirements instead of asking an opaque algorithm for a result. The Doctor can pre-fill those requirements from the patient's medical file: an auto-suggest service derives one clinical-condition requirement per active diagnosis plus one specialty requirement per condition-to-specialty mapping (deduplicated, each labelled with its source). A rule-based service compares required specialties and services with active external-hospital capabilities, produces a ranked explanation, and stores the recommendation snapshot. The Doctor selects a destination and submits the request to a designated Patient Guard. Only after approval can the Doctor transmit an authorized medical-file package through SMTP. The package carries a JSON manifest (including an `attachments` list) plus every document uploaded to the patient's medical file (PDF reports, images, text and Word documents, up to 10 MB each, checksummed and audit-logged on upload and download). Every decision and transmission attempt is auditable.
 
 If a patient dies, only an authorized Doctor may draft and issue a death certificate. The linked guard may view and print an issued certificate but cannot create, alter, issue, or void it.
 
@@ -762,6 +762,12 @@ Legend: **Manage** = create/read/update through valid transitions; **Scoped** = 
 - Eligible call initiation, short-lived Twilio client token, call detail/history, decline/end actions.
 - Signed Twilio voice/status webhooks update `CallSession` and participants idempotently.
 - Provider availability endpoint lets UI disable calling with an explanation.
+- WebRTC calls ring app-wide: a global call overlay (mounted in the application shell, not on the `/calls` page) surfaces incoming calls on any route, with a background poll as a safety net when the realtime socket is unavailable.
+- WebRTC offers/answers are persisted on `CallSession` (`offer_sdp`/`offer_from`, `answer_sdp`/`answer_from`) when relayed through `POST /calls/{id}/signal/`, so a participant who missed the realtime delivery (different page, reconnecting socket) recovers the signal from `GET /calls/{id}/` when accepting or connecting instead of failing.
+- One active call per participant: initiating while either side is already in a `QUEUED`/`RINGING`/`IN_PROGRESS` session is rejected with `409 call_busy`. Two people calling each other at the same moment are serialized (user-row locks, stable order) — the earlier session wins and the later caller gets a busy message, WhatsApp-style.
+- Missed calls notify: an unanswered ring is marked `NO_ANSWER` (callee app ring timeout, plus a server-side safety net that expires stale `QUEUED`/`RINGING` sessions on list) and creates a persistent, deduped `calls.missed` notification for the callee.
+- Users notice notifications without visiting the center: live unread badge on the sidebar bell and clickable toasts on any page when a `notification.created` realtime event arrives.
+- ICU AI decision support: `IcuRecommendation` is generated with each vital observation (specialist availability/overload, ICU bed capacity, criticality → eligibility, readiness score, plain-language explanation). `GET /vital-observations/icu-recommendations/` feeds the Doctor/Nurse "ICU recommendations" pages, and each observation embeds its recommendation for display in vital history.
 
 ### Notifications — `/notifications`
 

@@ -12,7 +12,12 @@ from django.utils import timezone
 
 from apps.audit.models import MedicalRecordAccess
 from apps.audit.services import record_audit_event, record_medical_access
-from apps.clinical_records.models import Allergy, Diagnosis, TreatmentPlan
+from apps.clinical_records.models import (
+    Allergy,
+    Diagnosis,
+    MedicalFileAttachment,
+    TreatmentPlan,
+)
 from apps.hospital.models import (
     AvailabilityStatus,
     ExternalHospital,
@@ -372,6 +377,11 @@ def _medical_package(transfer):
                 "title", "objectives", "instructions", "starts_on", "ends_on"
             )
         ),
+        "attachments": list(
+            MedicalFileAttachment.objects.filter(patient=patient).values(
+                "original_name", "mime_type", "byte_size", "checksum", "uploaded_at"
+            )
+        ),
         "active_prescriptions": [
             {
                 "starts_on": item.starts_on,
@@ -449,6 +459,19 @@ def transmit_medical_package(*, transfer, doctor, request=None):
             to=[transmission.recipient_email],
         )
         message.attach(absolute.name, content, "application/json")
+        # Include every document attached to the patient's medical file so the
+        # destination hospital receives the complete record.
+        for attachment in MedicalFileAttachment.objects.filter(patient=locked.patient):
+            try:
+                message.attach(
+                    attachment.original_name,
+                    attachment.file.read(),
+                    attachment.mime_type,
+                )
+            except Exception:
+                # An unreadable attachment must not block the authorized
+                # package; the JSON payload lists its metadata.
+                continue
         message.send(fail_silently=False)
     except Exception as exc:
         transmission.status = TransferTransmission.Status.FAILED
@@ -492,3 +515,58 @@ def transmit_medical_package(*, transfer, doctor, request=None):
             after={"recipient": transmission.recipient_email, "checksum": checksum},
         )
     return transmission
+
+
+def suggest_transfer_requirements(*, patient) -> list[dict]:
+    """Derive transfer-requirement suggestions from the patient's medical file:
+    every active (non-resolved, non-error) diagnosis contributes its clinical
+    condition as a CONDITION requirement, and each condition's mapped
+    specialties (the Head of Service's specialty→condition catalogue) as
+    SPECIALTY requirements. De-duplicated, with weights from the catalogue."""
+    diagnoses = (
+        Diagnosis.objects.filter(patient=patient)
+        .exclude(status=Diagnosis.Status.ENTERED_IN_ERROR)
+        .exclude(status=Diagnosis.Status.RESOLVED)
+        .filter(condition__isnull=False)
+        .select_related("condition")
+    )
+    suggestions: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(requirement_type: str, target_id, label: str, weight: str, source: str) -> None:
+        key = (requirement_type, str(target_id))
+        if key in seen:
+            return
+        seen.add(key)
+        suggestions.append(
+            {
+                "requirement_type": requirement_type,
+                "target": str(target_id),
+                "label": label,
+                "weight": weight,
+                "is_mandatory": False,
+                "source": source,
+            }
+        )
+
+    for diagnosis in diagnoses:
+        condition = diagnosis.condition
+        add(
+            "CONDITION",
+            condition.id,
+            condition.name,
+            "1.00",
+            f"From diagnosis: {diagnosis.name_snapshot}",
+        )
+        mappings = SpecialtyCondition.objects.filter(
+            condition=condition, specialty__is_active=True
+        ).select_related("specialty")
+        for mapping in mappings:
+            add(
+                "SPECIALTY",
+                mapping.specialty_id,
+                mapping.specialty.name,
+                str(mapping.match_weight),
+                f"From condition: {condition.name}",
+            )
+    return suggestions

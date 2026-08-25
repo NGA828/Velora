@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   Boxes,
+  BrainCircuit,
   Building2,
   CreditCard,
   ClipboardList,
@@ -31,7 +32,10 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { logout } from '../../modules/auth/api/auth-api'
 import { sessionQueryKey, useSession } from '../../modules/auth/hooks/use-session'
+import { useUnreadNotificationCount } from '../../modules/notifications/use-unread-notifications'
 import { AppApiError } from '../../shared/api/errors'
+import { CallOverlay } from '../../shared/calls/CallOverlay'
+import { NotificationToasts } from '../../shared/notifications/NotificationToasts'
 import { RealtimeProvider } from '../providers/RealtimeProvider'
 import { Button } from '../../shared/ui/actions/Button'
 import { Alert } from '../../shared/ui/feedback/Alert'
@@ -51,6 +55,7 @@ const doctorNavigation = [
   { to: '/doctor/medical-files', label: 'Medical files', icon: FileText, end: false },
   { to: '/doctor/prescriptions', label: 'Prescriptions', icon: Pill, end: false },
   { to: '/doctor/monitoring', label: 'Patient monitoring', icon: MessagesSquare, end: false },
+  { to: '/doctor/icu-recommendations', label: 'ICU recommendations', icon: BrainCircuit, end: false },
   { to: '/doctor/transfers', label: 'Transfer requests', icon: Send, end: false },
   { to: '/doctor/death-certificates', label: 'Death certificates', icon: ScrollText, end: false },
   { to: '/messages', label: 'Messages', icon: MessagesSquare, end: false },
@@ -65,6 +70,7 @@ const nurseNavigation = [
   { to: '/nurse/vital-signs', label: 'Vital signs', icon: Activity, end: false },
   { to: '/nurse/medication', label: 'Medication', icon: Pill, end: false },
   { to: '/nurse/patient-guards', label: 'Patient Guards', icon: ShieldCheck, end: false },
+  { to: '/nurse/icu-recommendations', label: 'ICU recommendations', icon: BrainCircuit, end: false },
   { to: '/messages', label: 'Messages', icon: MessagesSquare, end: false },
   { to: '/calls', label: 'Calls', icon: PhoneCall, end: false },
   { to: '/notifications', label: 'Notifications', icon: Bell, end: false },
@@ -136,6 +142,7 @@ export function HospitalShell() {
     },
   })
   const user = session.data!.user
+  const unreadNotifications = useUnreadNotificationCount()
   const navigation = user.role === 'ADMIN'
     ? adminNavigation
     : user.role === 'ACCOUNTING'
@@ -154,6 +161,8 @@ export function HospitalShell() {
   return (
     <div className="hospital-shell">
       <RealtimeProvider userId={user.id} />
+      <CallOverlay userId={user.id} />
+      <NotificationToasts />
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <header className="mobile-topbar">
         <Brand />
@@ -187,11 +196,22 @@ export function HospitalShell() {
             >
               <Icon size={19} aria-hidden="true" />
               <span>{label}</span>
+              {label === 'Notifications' && unreadNotifications > 0 && (
+                <span className="sidebar__badge" aria-label={`${unreadNotifications} unread notifications`}>
+                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
         <div className="sidebar__account">
-          <span className="avatar" aria-hidden="true">{initials}</span>
+          <span className="avatar" aria-hidden="true">
+            {user.avatar_url ? (
+              <img src={user.avatar_url} alt="" />
+            ) : (
+              initials
+            )}
+          </span>
           <span className="sidebar__account-copy">
             <strong>{user.full_name}</strong>
             <small>{user.email}</small>

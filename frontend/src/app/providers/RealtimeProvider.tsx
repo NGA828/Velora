@@ -32,6 +32,7 @@ export function RealtimeProvider({ userId }: { userId: string }) {
         }
         if (event.type.startsWith('notification.')) {
           void client.invalidateQueries({ queryKey: ['notifications'] })
+          void client.invalidateQueries({ queryKey: ['notifications', 'unread'] })
         }
         if (event.type.startsWith('call.')) {
           void client.invalidateQueries({ queryKey: ['calls'] })

@@ -160,3 +160,59 @@ def test_rejected_transfer_cannot_send_package():
     )
     assert blocked.status_code == 400
     assert TransferRequest.objects.get().status == "REJECTED"
+
+
+@pytest.mark.django_db
+def test_suggest_requirements_derives_conditions_and_specialties_from_medical_file():
+    """The doctor can auto-suggest transfer requirements from the patient's
+    medical file: active diagnoses contribute their condition plus the mapped
+    specialties from the Head of Service catalogue."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.clinical_records.models import Diagnosis, MedicalFile
+    from apps.hospital.models import ClinicalCondition, SpecialtyCondition
+
+    doctor, _, guard, profile, patient = monitoring_context()
+    specialty = Specialty.objects.create(code="CARD", name="Cardiology")
+    condition = ClinicalCondition.objects.create(code="I25", name="Ischaemic heart disease")
+    SpecialtyCondition.objects.create(
+        specialty=specialty, condition=condition, match_weight="3.00"
+    )
+    # monitoring_context() registers the patient, which opens their medical file.
+    assert MedicalFile.objects.filter(patient=patient).exists()
+    Diagnosis.objects.create(
+        patient=patient,
+        condition=condition,
+        code_snapshot="I25",
+        name_snapshot="Ischaemic heart disease",
+        status=Diagnosis.Status.CONFIRMED,
+        diagnosed_at=timezone.now() - timedelta(days=2),
+        diagnosed_by=doctor,
+    )
+
+    client = APIClient()
+    client.force_authenticate(doctor)
+    response = client.get(
+        reverse("transfers:transfer-request-suggest-requirements"),
+        {"patient": str(patient.id)},
+    )
+    assert response.status_code == 200
+    suggestions = response.json()["suggestions"]
+    types = {(item["requirement_type"], item["target"]) for item in suggestions}
+    assert ("CONDITION", str(condition.id)) in types
+    assert ("SPECIALTY", str(specialty.id)) in types
+    by_type = {item["requirement_type"]: item for item in suggestions}
+    assert by_type["SPECIALTY"]["weight"] == "3.00"
+    assert by_type["CONDITION"]["label"] == "Ischaemic heart disease"
+    assert "diagnosis" in by_type["CONDITION"]["source"].lower()
+
+    # A Patient Guard cannot use the suggestion endpoint (doctor-only).
+    guard_client = APIClient()
+    guard_client.force_authenticate(guard)
+    denied = guard_client.get(
+        reverse("transfers:transfer-request-suggest-requirements"),
+        {"patient": str(patient.id)},
+    )
+    assert denied.status_code == 403

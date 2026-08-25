@@ -3,6 +3,7 @@ from .transfers import (
     decide_transfer,
     generate_recommendations,
     submit_to_guardian,
+    suggest_transfer_requirements,
     transmit_medical_package,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "decide_transfer",
     "generate_recommendations",
     "submit_to_guardian",
+    "suggest_transfer_requirements",
     "transmit_medical_package",
 ]

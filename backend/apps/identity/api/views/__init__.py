@@ -4,6 +4,8 @@ from .auth import (
     InvitationAcceptView,
     LoginView,
     LogoutView,
+    MeView,
+    MyAvatarView,
     SessionView,
 )
 from .staff import (
@@ -21,6 +23,8 @@ __all__ = [
     "InvitationAcceptView",
     "InvitationRevokeView",
     "LoginView",
+    "MeView",
+    "MyAvatarView",
     "LogoutView",
     "SessionView",
     "StaffDetailView",

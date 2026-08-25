@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -6,8 +9,17 @@ from apps.audit.services import record_audit_event
 from apps.calls.models import CallParticipant, CallSession
 from apps.messaging.realtime import publish_user_event
 from apps.messaging.selectors import users_may_communicate
+from apps.notifications.models import Notification
+from apps.notifications.services import notify
 from integrations.twilio.config import get_twilio_settings
 from integrations.twilio.tokens import twilio_identity
+
+User = get_user_model()
+
+
+class CallBusyError(Exception):
+    """Raised when a call cannot be initiated because either participant is
+    already engaged in another call (including a simultaneous same-pair call)."""
 
 
 @transaction.atomic
@@ -26,6 +38,38 @@ def initiate_call(*, caller, recipient, conversation=None, request=None, provide
         raise ValidationError("You are not a participant in this conversation.")
     if not users_may_communicate(first=caller, second=recipient, patient=patient):
         raise ValidationError("You are not authorized to call this user.")
+    # A participant can be in only one call at a time. Lock both user rows in a
+    # stable order so two people calling each other at the same moment are
+    # serialized: the earlier session wins and the later caller is told the
+    # contact is busy (WhatsApp-style) instead of two parallel sessions ringing
+    # at once.
+    list(
+        User.objects.select_for_update()
+        .filter(pk__in=[caller.pk, recipient.pk])
+        .order_by("pk")
+    )
+    active_statuses = {
+        CallSession.Status.QUEUED,
+        CallSession.Status.RINGING,
+        CallSession.Status.IN_PROGRESS,
+    }
+    active_sessions = CallSession.objects.filter(
+        participants__user__in=[caller.pk, recipient.pk],
+        status__in=active_statuses,
+    ).distinct()
+    for session in active_sessions:
+        participant_ids = set(session.participants.values_list("user_id", flat=True))
+        if caller.pk in participant_ids and recipient.pk in participant_ids:
+            if session.initiated_by_id == caller.pk:
+                raise CallBusyError(
+                    "You already have a call with this contact. Answer it or wait for it to end."
+                )
+            raise CallBusyError(
+                "This contact is calling you. Answer the incoming call instead of placing a new one."
+            )
+        if caller.pk in participant_ids:
+            raise CallBusyError("You already have an active call. End it before starting another.")
+        raise CallBusyError("The contact is currently in another call. Try again shortly.")
     now = timezone.now()
     session = CallSession.objects.create(
         conversation=conversation,
@@ -53,7 +97,10 @@ def initiate_call(*, caller, recipient, conversation=None, request=None, provide
             publish_user_event(
                 user_id=user_id,
                 event_type="call.initiated",
-                payload={"call_session_id": str(session.id)},
+                payload={
+                    "call_session_id": str(session.id),
+                    "initiated_by": str(caller.id),
+                },
             )
             for user_id in [caller.id, recipient.id]
         ]
@@ -103,6 +150,17 @@ def signal_call(*, session, sender, to_user, data, request=None):
         raise ValidationError("The signaling target is not a participant in this call.")
     if sender.id == to_user:
         raise ValidationError("A call cannot signal itself.")
+    # Persist the WebRTC offer/answer so the other participant can always
+    # recover it from the API, even if the realtime delivery was missed
+    # (e.g. they were on another page or their socket was reconnecting).
+    if isinstance(data, dict) and data.get("type") == "offer":
+        locked.offer_sdp = str(data.get("sdp") or "")
+        locked.offer_from = sender
+        locked.save(update_fields=["offer_sdp", "offer_from", "updated_at"])
+    elif isinstance(data, dict) and data.get("type") == "answer":
+        locked.answer_sdp = str(data.get("sdp") or "")
+        locked.answer_from = sender
+        locked.save(update_fields=["answer_sdp", "answer_from", "updated_at"])
     transaction.on_commit(
         lambda: publish_user_event(
             user_id=to_user,
@@ -123,6 +181,36 @@ def signal_call(*, session, sender, to_user, data, request=None):
         after={"to_user_id": str(to_user), "signal_type": str(data.get("type")) if isinstance(data, dict) else None},
     )
     return locked
+
+
+@transaction.atomic
+def expire_stale_calls(*, max_ring_seconds: int = 45) -> list[CallSession]:
+    """Safety net: calls that never left QUEUED/RINGING (e.g. the callee's app
+    was closed or the ring was never answered) are marked NO_ANSWER after the
+    ring deadline, which also triggers the missed-call notification.
+
+    Called whenever a participant lists calls, so no background worker is
+    required; idempotent and safe under concurrency."""
+    cutoff = timezone.now() - timedelta(seconds=max_ring_seconds)
+    stale = list(
+        CallSession.objects.filter(
+            status__in=[CallSession.Status.QUEUED, CallSession.Status.RINGING],
+            initiated_at__lt=cutoff,
+        )
+    )
+    expired: list[CallSession] = []
+    for session in stale:
+        try:
+            update_call_status(
+                session=session,
+                actor=session.initiated_by,
+                status=CallSession.Status.NO_ANSWER,
+            )
+        except ValidationError:
+            # Another request transitioned the call concurrently; nothing to do.
+            continue
+        expired.append(session)
+    return expired
 
 
 @transaction.atomic
@@ -162,6 +250,27 @@ def update_call_status(*, session, actor, status, request=None):
         locked.ended_at = now
         locked.participants.update(status=CallParticipant.Status.LEFT, left_at=now)
     locked.save(update_fields=["status", "ringing_at", "answered_at", "ended_at", "updated_at"])
+    # A missed call leaves a persistent notification for the callee so they
+    # know about it even if they were away from the app (deduped per session).
+    if status == CallSession.Status.NO_ANSWER:
+        callee = (
+            locked.participants.exclude(user=locked.initiated_by)
+            .select_related("user")
+            .first()
+        )
+        if callee:
+            caller_name = locked.initiated_by.get_full_name()
+            notify(
+                recipient=callee.user,
+                actor=locked.initiated_by,
+                category="calls.missed",
+                severity=Notification.Severity.WARNING,
+                title=f"Missed call from {caller_name}",
+                body="You did not answer this call. It was recorded in your call history.",
+                route="/calls",
+                data={"call_session_id": str(locked.id)},
+                dedupe_key=f"call-missed-{locked.id}",
+            )
     participant_ids = list(locked.participants.values_list("user_id", flat=True))
     transaction.on_commit(
         lambda: [

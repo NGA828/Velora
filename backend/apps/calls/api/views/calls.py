@@ -15,7 +15,9 @@ from apps.calls.api.serializers import (
 from apps.calls.models import CallSession
 from apps.calls.permissions import IsActiveUser
 from apps.calls.services import (
+    CallBusyError,
     cancel_call,
+    expire_stale_calls,
     initiate_call,
     signal_call,
     update_call_status,
@@ -42,6 +44,20 @@ def unavailable_response():
     )
 
 
+def busy_response(message: str):
+    return Response(
+        {
+            "error": {
+                "code": "call_busy",
+                "message": message,
+                "fields": {},
+                "request_id": None,
+            }
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
 class CallSessionViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
     serializer_class = CallSessionSerializer
     throttle_scope_by_action = {"create": "call_initiate", "token": "call_initiate"}
@@ -54,6 +70,12 @@ class CallSessionViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
             .prefetch_related("participants__user")
             .distinct()
         )
+
+    def list(self, request, *args, **kwargs):
+        # Expire calls that were never answered (covers a callee whose app was
+        # closed) so history stays honest and missed-call notifications fire.
+        expire_stale_calls()
+        return super().list(request, *args, **kwargs)
 
     @action(detail=False, methods=["get"])
     def availability(self, request):
@@ -100,6 +122,8 @@ class CallSessionViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
                 provider=serializer.validated_data["provider"],
                 request=request,
             )
+        except CallBusyError as exc:
+            return busy_response(str(exc))
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"detail": exc.messages}) from exc
         return Response(

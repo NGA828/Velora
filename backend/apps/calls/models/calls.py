@@ -60,6 +60,26 @@ class CallSession(UUIDTimeStampedModel):
     answered_at = models.DateTimeField(null=True, blank=True)
     ended_at = models.DateTimeField(null=True, blank=True)
     failure_reason = models.CharField(max_length=300, blank=True)
+    # WebRTC signaling is relayed over the realtime channel, but the offer and
+    # answer are also persisted here so a participant who was offline (or on
+    # another page when the signal arrived) can recover them when accepting or
+    # connecting instead of being stuck with a lost signal.
+    offer_sdp = models.TextField(blank=True)
+    offer_from = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="call_offers",
+        null=True,
+        blank=True,
+    )
+    answer_sdp = models.TextField(blank=True)
+    answer_from = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="call_answers",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ["-initiated_at"]
