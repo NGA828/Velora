@@ -241,10 +241,18 @@ class CallManager {
       if (this.remoteAudio && event.streams[0]) {
         this.remoteAudio.srcObject = event.streams[0]
       }
+      // Media is flowing — ensure UI reflects active call even if
+      // connectionState event was missed, delayed, or already fired.
+      if (this.state.phase !== 'active') {
+        stopRingtone()
+        this.clearRingTimer()
+        this.setState({ phase: 'active' })
+      }
     }
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
         stopRingtone()
+        this.clearRingTimer()
         this.setState({ phase: 'active' })
         if (this.activeSessionId) {
           void updateCallStatus(this.activeSessionId, 'IN_PROGRESS').catch(() => undefined)
@@ -280,6 +288,14 @@ class CallManager {
       if (session.answer_sdp && session.answer_from && session.answer_from !== this.userId) {
         await pc.setRemoteDescription({ type: 'answer', sdp: session.answer_sdp })
         await this.flushCandidates(pc, sessionId)
+        // After recovering a missed answer, ensure the UI leaves ringing.
+        if (pc.connectionState === 'connected') {
+          stopRingtone()
+          this.setState({ phase: 'active' })
+        } else if (this.state.phase === 'ringing') {
+          stopRingtone()
+          this.setState({ phase: 'connecting' })
+        }
       }
     } catch {
       // The realtime answer will arrive shortly; nothing to recover.
@@ -436,6 +452,14 @@ class CallManager {
         await signalCall(incoming.id, other, { type: 'answer', sdp: answer.sdp ?? '' })
       }
       await updateCallStatus(incoming.id, 'IN_PROGRESS')
+      // Optimistically mark active — the server confirms IN_PROGRESS and
+      // WebRTC ontrack/connected will also set active, but this avoids a
+      // stuck \"connecting\" UI if those events are delayed.
+      stopRingtone()
+      this.clearRingTimer()
+      if (this.state.phase !== 'active') {
+        this.setState({ phase: 'active' })
+      }
     } catch {
       this.setState({ error: 'Could not answer the call. Please try again.' })
       await updateCallStatus(incoming.id, 'FAILED').catch(() => undefined)
@@ -509,11 +533,25 @@ class CallManager {
     }
     if (data.type === 'answer') {
       const pc = this.pc
-      if (sessionId === this.activeSessionId && pc && !pc.remoteDescription) {
-        void pc
-          .setRemoteDescription({ type: 'answer', sdp: data.sdp })
-          .then(() => this.flushCandidates(pc, sessionId))
-          .catch(() => undefined)
+      if (sessionId === this.activeSessionId) {
+        stopRingtone()
+        this.clearRingTimer()
+        if (this.state.phase === 'ringing') {
+          this.setState({ phase: 'connecting' })
+        }
+        if (pc && !pc.remoteDescription) {
+          void pc
+            .setRemoteDescription({ type: 'answer', sdp: data.sdp })
+            .then(() => this.flushCandidates(pc, sessionId))
+            .then(() => {
+              if (pc.connectionState === 'connected') {
+                this.setState({ phase: 'active' })
+              } else if (this.state.phase === 'ringing') {
+                this.setState({ phase: 'connecting' })
+              }
+            })
+            .catch(() => undefined)
+        }
       }
       return
     }
@@ -559,6 +597,17 @@ class CallManager {
         this.clearRingTimer()
         stopRingtone()
         this.setState({ incomingSession: null })
+        return
+      }
+      if (status === 'IN_PROGRESS') {
+        // Callee answered (possibly on another tab) — ensure ring stops.
+        // If we are the callee and already moved to activeSession via accept(),
+        // the activeSession branch below will handle it; otherwise clear stale incoming.
+        this.clearRingTimer()
+        stopRingtone()
+        if (!this.state.activeSession) {
+          this.setState({ incomingSession: null })
+        }
       }
       return
     }
@@ -567,10 +616,19 @@ class CallManager {
       this.endSession(NOTICE_BY_STATUS[status] ?? '')
       return
     }
-    if (status === 'IN_PROGRESS' && this.state.role === 'caller') {
-      // The callee answered; if the answer signal was lost, recover it from
-      // the server so the call still connects.
-      void this.recoverAnswer(sessionId)
+    if (status === 'IN_PROGRESS') {
+      stopRingtone()
+      this.clearRingTimer()
+      // Server confirms the call was answered — move out of ringing/connecting
+      // into active so the UI doesn't stay stuck even if WebRTC events are delayed.
+      if (this.state.phase === 'ringing' || this.state.phase === 'connecting') {
+        this.setState({ phase: 'active' })
+      }
+      if (this.state.role === 'caller') {
+        // The callee answered; if the answer signal was lost, recover it from
+        // the server so the call still connects.
+        void this.recoverAnswer(sessionId)
+      }
     }
   }
 
