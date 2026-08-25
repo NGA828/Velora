@@ -1,13 +1,14 @@
 import { createBrowserRouter } from 'react-router-dom'
 
 import { NotFoundPage } from './error-boundaries/NotFoundPage'
+import { RouteErrorBoundary } from './error-boundaries/RouteErrorBoundary'
 import { RequirePasswordReady } from './guards/RequirePasswordReady'
 import { RequireRole } from './guards/RequireRole'
 import { SessionGate } from './guards/SessionGate'
 import { HospitalShell } from './layouts/HospitalShell'
 import { WorkspaceHomePage } from './WorkspaceHomePage'
 
-export const createAppRouter = () => createBrowserRouter([
+const routes = [
   {
     path: '/login',
     lazy: async () => ({
@@ -385,6 +386,14 @@ export const createAppRouter = () => createBrowserRouter([
     ],
   },
   { path: '*', element: <NotFoundPage /> },
-])
+]
 
-export const router = createAppRouter()
+export const createAppRouter = () => createBrowserRouter([
+  {
+    // A layout route with no element still renders an <Outlet />, so this wraps
+    // every screen and catches lazy chunk rejections that would otherwise leave
+    // the user staring at a blank page with no way to recover.
+    errorElement: <RouteErrorBoundary />,
+    children: routes,
+  },
+])

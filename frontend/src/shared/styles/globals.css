@@ -565,8 +565,7 @@ small { font-size: 0.8rem; }
 .prescription-card__meta span { display: flex; align-items: center; gap: 6px; }
 .prescription-card__meta svg { width: 15px; }
 .prescription-medications { display: grid; gap: 1px; background: var(--color-border); }
-.prescription-medicatiodth: 15px; }
-.prescription-medications { display: grid; gap: 1px; background: var(--color-border); }
+.prescription-medications svg { width: 15px; }
 .prescription-medications > section { padding: 17px 22px; background: white; }
 .prescription-medications section > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .prescription-medications section > div:first-child span { color: var(--color-muted); font-size: .76rem; }
