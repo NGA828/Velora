@@ -95,6 +95,7 @@ export function CallOverlay({ userId }: { userId: string }) {
             <small>
               {peerName(active, userId)} · {state.role === 'caller' ? 'Outgoing' : 'Incoming'}
             </small>
+            {state.error && <small className="call-bar__error">{state.error}</small>}
           </div>
           {/* Local (muted) keeps the captured track alive; remote is audible. */}
           <audio ref={localAudioRef} muted autoPlay playsInline />

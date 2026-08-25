@@ -82,6 +82,8 @@ cd backend
 
 Voice calling remains disabled unless every Twilio setting in `.env.example` is configured. The TwiML application voice URL must point to `/api/v1/integrations/twilio/voice/`, and status callbacks are signature-validated at `/api/v1/integrations/twilio/status/`.
 
+In-app WebRTC calls are available without Twilio. The browser fetches its STUN/TURN servers from `GET /api/v1/calls/ice/`. STUN-only is fine for peers on the same network, but calls between browsers on different networks need a TURN relay; configure `WEBRTC_TURN_URLS`, `WEBRTC_TURN_USERNAME`, and `WEBRTC_TURN_CREDENTIAL` in the environment. ICE candidates are also persisted on each `CallSession`, so a call can finish connecting even if a realtime signaling frame was missed.
+
 ## Verification
 
 ```bash

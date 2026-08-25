@@ -4,6 +4,7 @@ import {
   createCall,
   getCall,
   getCalls,
+  getIceConfig,
   signalCall,
   updateCallStatus,
 } from '../../modules/communication/shared/api'
@@ -12,8 +13,11 @@ import { AppApiError } from '../api/errors'
 import type { RealtimeEvent } from '../realtime/bus'
 import { startRingtone, stopRingtone } from './ringtone'
 
-const ICE_CONFIGURATION: RTCConfiguration = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+
+function candidateKey(candidate: RTCIceCandidateInit | null | undefined): string {
+  if (!candidate) return ''
+  return `${candidate.candidate ?? ''}|${candidate.sdpMid ?? ''}|${candidate.sdpMLineIndex ?? ''}`
 }
 
 const TERMINAL_STATUSES = ['COMPLETED', 'DECLINED', 'CANCELLED', 'FAILED', 'NO_ANSWER']
@@ -90,6 +94,10 @@ class CallManager {
   private offers = new Map<string, { fromUser: string; sdp: string }>()
   /** ICE candidates that arrived before the remote description, per session. */
   private pendingCandidates = new Map<string, RTCIceCandidateInit[]>()
+  /** ICE candidates already applied to a peer connection, per session. */
+  private appliedCandidates = new Map<string, Set<string>>()
+  private iceConfiguration: RTCConfiguration | null = null
+  private iceConfigPromise: Promise<RTCConfiguration> | null = null
   private activeSessionId: string | null = null
   private pollTimer: number | null = null
   private noticeTimer: number | null = null
@@ -158,6 +166,9 @@ class CallManager {
     this.activeSessionId = null
     this.offers.clear()
     this.pendingCandidates.clear()
+    this.appliedCandidates.clear()
+    this.iceConfiguration = null
+    this.iceConfigPromise = null
     this.starting = false
     this.accepting = false
     this.setState({ ...INITIAL_STATE })
@@ -212,6 +223,7 @@ class CallManager {
       this.localStream = null
     }
     this.pendingCandidates.clear()
+    this.appliedCandidates.clear()
   }
 
   private async startMedia(): Promise<MediaStream> {
@@ -223,8 +235,51 @@ class CallManager {
     return stream
   }
 
-  private makePeerConnection(): RTCPeerConnection {
-    const pc = new RTCPeerConnection(ICE_CONFIGURATION)
+  private async getIceConfiguration(): Promise<RTCConfiguration> {
+    if (this.iceConfiguration) return this.iceConfiguration
+    if (!this.iceConfigPromise) {
+      this.iceConfigPromise = getIceConfig()
+        .then((config) => {
+          const iceServers = config.iceServers?.length ? config.iceServers : DEFAULT_ICE_SERVERS
+          this.iceConfiguration = { iceServers }
+          return this.iceConfiguration
+        })
+        .catch(() => {
+          // STUN-only is a best-effort fallback; deployments needing reliable
+          // cross-network calls should configure TURN in the environment.
+          this.iceConfiguration = { iceServers: DEFAULT_ICE_SERVERS }
+          return this.iceConfiguration
+        })
+    }
+    return this.iceConfigPromise
+  }
+
+  private markActive(): void {
+    if (this.state.phase !== 'active') {
+      stopRingtone()
+      this.clearRingTimer()
+      this.setState({ phase: 'active' })
+    }
+  }
+
+  private async applyCandidate(
+    pc: RTCPeerConnection,
+    sessionId: string,
+    candidate: RTCIceCandidateInit | null | undefined,
+  ): Promise<void> {
+    if (!candidate) return
+    const key = candidateKey(candidate)
+    if (!key) return
+    const applied = this.appliedCandidates.get(sessionId) ?? new Set<string>()
+    if (applied.has(key)) return
+    await pc.addIceCandidate(new RTCIceCandidate(candidate))
+    applied.add(key)
+    this.appliedCandidates.set(sessionId, applied)
+  }
+
+  private async makePeerConnection(): Promise<RTCPeerConnection> {
+    const configuration = await this.getIceConfiguration()
+    const pc = new RTCPeerConnection(configuration)
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         const session = this.state.activeSession
@@ -238,28 +293,45 @@ class CallManager {
       }
     }
     pc.ontrack = (event) => {
-      if (this.remoteAudio && event.streams[0]) {
-        this.remoteAudio.srcObject = event.streams[0]
+      const stream = event.streams[0]
+      if (stream && this.remoteAudio) {
+        this.remoteAudio.srcObject = stream
+        // `autoplay` usually starts playback; an explicit play() keeps the
+        // remote audio audible when srcObject is assigned after the element
+        // was already rendered (e.g. the callee accepts a little late).
+        void this.remoteAudio.play().catch(() => undefined)
       }
       // Media is flowing — ensure UI reflects active call even if
       // connectionState event was missed, delayed, or already fired.
-      if (this.state.phase !== 'active') {
-        stopRingtone()
-        this.clearRingTimer()
-        this.setState({ phase: 'active' })
-      }
+      this.markActive()
     }
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'connected') {
+      const connectionState = pc.connectionState
+      if (connectionState === 'connected') {
         stopRingtone()
         this.clearRingTimer()
-        this.setState({ phase: 'active' })
+        this.markActive()
         if (this.activeSessionId) {
           void updateCallStatus(this.activeSessionId, 'IN_PROGRESS').catch(() => undefined)
         }
-      }
-      if (pc.connectionState === 'failed') {
-        this.setState({ error: 'The connection dropped. Please try the call again.' })
+      } else if (connectionState === 'connecting' || connectionState === 'new') {
+        stopRingtone()
+        this.clearRingTimer()
+        if (this.state.phase === 'active') {
+          this.setState({ phase: 'connecting' })
+        }
+      } else if (connectionState === 'disconnected') {
+        // ICE can recover from a transient disconnect; keep the call open but
+        // surface that the link is re-establishing rather than claiming active.
+        if (this.state.phase === 'active') {
+          this.setState({ phase: 'connecting' })
+        }
+      } else if (connectionState === 'failed') {
+        this.setState({
+          error: 'The audio connection failed. Check your network and try again.',
+        })
+        this.endSession('The call could not be connected.')
+      } else if (connectionState === 'closed') {
         this.endSession()
       }
     }
@@ -269,14 +341,30 @@ class CallManager {
 
   private async flushCandidates(pc: RTCPeerConnection, sessionId: string): Promise<void> {
     const buffered = this.pendingCandidates.get(sessionId)
-    if (!buffered) return
-    this.pendingCandidates.delete(sessionId)
-    for (const candidate of buffered) {
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate))
-      } catch {
-        // Late or redundant candidates are safe to ignore.
+    if (buffered) {
+      this.pendingCandidates.delete(sessionId)
+      for (const candidate of buffered) {
+        try {
+          await this.applyCandidate(pc, sessionId, candidate)
+        } catch {
+          // Late or redundant candidates are safe to ignore.
+        }
       }
+    }
+    // Recover candidates persisted on the server when the realtime delivery
+    // was missed so the two peers can still establish media connectivity.
+    try {
+      const session = await getCall(sessionId)
+      for (const item of session.ice_candidates ?? []) {
+        if (!item || item.from_user === this.userId) continue
+        try {
+          await this.applyCandidate(pc, sessionId, item.candidate)
+        } catch {
+          // Redundant or expired candidates are safe to ignore.
+        }
+      }
+    } catch {
+      // The realtime candidate stream may still deliver a moment later.
     }
   }
 
@@ -357,7 +445,7 @@ class CallManager {
     startRingtone('ringback')
     try {
       const stream = await this.startMedia()
-      const pc = this.makePeerConnection()
+      const pc = await this.makePeerConnection()
       stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream))
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
@@ -441,7 +529,7 @@ class CallManager {
     })
     try {
       const stream = await this.startMedia()
-      const pc = this.makePeerConnection()
+      const pc = await this.makePeerConnection()
       stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream))
       await pc.setRemoteDescription({ type: 'offer', sdp: offer.sdp })
       await this.flushCandidates(pc, incoming.id)
@@ -452,13 +540,16 @@ class CallManager {
         await signalCall(incoming.id, other, { type: 'answer', sdp: answer.sdp ?? '' })
       }
       await updateCallStatus(incoming.id, 'IN_PROGRESS')
-      // Optimistically mark active — the server confirms IN_PROGRESS and
-      // WebRTC ontrack/connected will also set active, but this avoids a
-      // stuck \"connecting\" UI if those events are delayed.
+      // Stay on "Connecting…" until the peer connection is actually
+      // established. The server status alone only confirms the callee tapped
+      // Accept; it does not mean media is flowing. onconnectionstatechange /
+      // ontrack promote the UI to active.
       stopRingtone()
       this.clearRingTimer()
-      if (this.state.phase !== 'active') {
-        this.setState({ phase: 'active' })
+      if (pc.connectionState === 'connected') {
+        this.markActive()
+      } else if (this.state.phase !== 'connecting') {
+        this.setState({ phase: 'connecting' })
       }
     } catch {
       this.setState({ error: 'Could not answer the call. Please try again.' })
@@ -558,7 +649,7 @@ class CallManager {
     if (data.type === 'candidate') {
       const pc = this.pc
       if (pc && pc.remoteDescription) {
-        void pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => undefined)
+        void this.applyCandidate(pc, sessionId, data.candidate).catch(() => undefined)
       } else {
         const buffered = this.pendingCandidates.get(sessionId) ?? []
         buffered.push(data.candidate)
@@ -619,10 +710,12 @@ class CallManager {
     if (status === 'IN_PROGRESS') {
       stopRingtone()
       this.clearRingTimer()
-      // Server confirms the call was answered — move out of ringing/connecting
-      // into active so the UI doesn't stay stuck even if WebRTC events are delayed.
+      // Server confirms the callee accepted. Leave the ringing UI, but do
+      // not claim "active" before the peer connection is established — that
+      // would show "Call in progress" while no audio is actually flowing.
       if (this.state.phase === 'ringing' || this.state.phase === 'connecting') {
-        this.setState({ phase: 'active' })
+        const connected = this.pc?.connectionState === 'connected' && this.pc?.remoteDescription
+        this.setState({ phase: connected ? 'active' : 'connecting' })
       }
       if (this.state.role === 'caller') {
         // The callee answered; if the answer signal was lost, recover it from
@@ -679,6 +772,12 @@ class CallManager {
           (this.state.phase === 'ringing' || this.state.phase === 'connecting')
         ) {
           this.handleStatusUpdate(this.activeSessionId, 'IN_PROGRESS')
+        }
+        // The peer might still be trickling ICE candidates after our first
+        // flush. Re-apply server-persisted candidates on each poll; they are
+        // deduplicated so this is cheap and idempotent.
+        if (this.activeSessionId && this.pc?.remoteDescription) {
+          void this.flushCandidates(this.pc, this.activeSessionId).catch(() => undefined)
         }
       }
       if (this.state.activeSession || this.state.incomingSession) return

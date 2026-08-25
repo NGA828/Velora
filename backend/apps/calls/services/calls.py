@@ -26,7 +26,11 @@ class CallBusyError(Exception):
 def initiate_call(*, caller, recipient, conversation=None, request=None, provider=None):
     config = get_twilio_settings()
     if provider is None:
-        provider = CallSession.Provider.WEBRTC if not config.available else CallSession.Provider.TWILIO
+        provider = (
+            CallSession.Provider.WEBRTC
+            if not config.available
+            else CallSession.Provider.TWILIO
+        )
     use_webrtc = provider == CallSession.Provider.WEBRTC
     if not use_webrtc and not config.available:
         raise ValidationError("Voice calling is unavailable because Twilio is not configured.")
@@ -64,9 +68,11 @@ def initiate_call(*, caller, recipient, conversation=None, request=None, provide
                 raise CallBusyError(
                     "You already have a call with this contact. Answer it or wait for it to end."
                 )
-            raise CallBusyError(
-                "This contact is calling you. Answer the incoming call instead of placing a new one."
+            busy_message = (
+                "This contact is calling you. Answer the incoming call instead of "
+                "placing a new one."
             )
+            raise CallBusyError(busy_message)
         if caller.pk in participant_ids:
             raise CallBusyError("You already have an active call. End it before starting another.")
         raise CallBusyError("The contact is currently in another call. Try again shortly.")
@@ -161,6 +167,19 @@ def signal_call(*, session, sender, to_user, data, request=None):
         locked.answer_sdp = str(data.get("sdp") or "")
         locked.answer_from = sender
         locked.save(update_fields=["answer_sdp", "answer_from", "updated_at"])
+    elif isinstance(data, dict) and data.get("type") == "candidate":
+        # Persist candidates so the peer can recover them even when the
+        # realtime socket is unavailable. Cap the list to avoid unbounded
+        # growth on a noisy/failed negotiation.
+        candidates = list(locked.ice_candidates or [])
+        candidates.append(
+            {
+                "from_user": str(sender.id),
+                "candidate": data.get("candidate"),
+            }
+        )
+        locked.ice_candidates = candidates[-128:]
+        locked.save(update_fields=["ice_candidates", "updated_at"])
     transaction.on_commit(
         lambda: publish_user_event(
             user_id=to_user,
@@ -178,7 +197,10 @@ def signal_call(*, session, sender, to_user, data, request=None):
         action="calls.session.signaled",
         object_type="calls.CallSession",
         object_id=locked.id,
-        after={"to_user_id": str(to_user), "signal_type": str(data.get("type")) if isinstance(data, dict) else None},
+        after={
+            "to_user_id": str(to_user),
+            "signal_type": str(data.get("type")) if isinstance(data, dict) else None,
+        },
     )
     return locked
 

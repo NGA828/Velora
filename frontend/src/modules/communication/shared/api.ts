@@ -10,6 +10,7 @@ export async function getMessages(conversation: string): Promise<Message[]> { re
 export async function sendMessage(conversation: string, body: string, attachment?: File): Promise<Message> { await prepareCsrf(); const data = new FormData(); data.set('body', body); data.set('client_message_id', crypto.randomUUID()); if (attachment) data.set('attachment', attachment); return (await apiClient.post<Message>(`/conversations/${conversation}/messages/`, data)).data }
 export async function acknowledgeMessages(conversation: string, upToMessage: string, seen: boolean): Promise<void> { await prepareCsrf(); await apiClient.post(`/conversations/${conversation}/${seen ? 'seen' : 'delivered'}/`, { up_to_message: upToMessage }) }
 export async function getCallAvailability(): Promise<{ available: boolean }> { return (await apiClient.get<{ available: boolean }>('/calls/availability/')).data }
+export async function getIceConfig(): Promise<{ iceServers: RTCIceServer[] }> { return (await apiClient.get<{ iceServers: RTCIceServer[] }>('/calls/ice/')).data }
 export async function getVoiceToken(): Promise<{ token: string; identity: string; expires_in: number }> { return (await apiClient.get('/calls/token/')).data }
 export async function getCalls(): Promise<CallSession[]> { return (await apiClient.get<PaginatedResponse<CallSession>>('/calls/', { params: { page_size: 100 } })).data.data }
 export async function getCall(id: string): Promise<CallSession> { return (await apiClient.get<CallSession>(`/calls/${id}/`)).data }
