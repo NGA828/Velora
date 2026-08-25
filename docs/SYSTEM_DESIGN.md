@@ -765,6 +765,8 @@ Legend: **Manage** = create/read/update through valid transitions; **Scoped** = 
 - WebRTC calls ring app-wide: a global call overlay (mounted in the application shell, not on the `/calls` page) surfaces incoming calls on any route, with a background poll as a safety net when the realtime socket is unavailable.
 - WebRTC offers/answers are persisted on `CallSession` (`offer_sdp`/`offer_from`, `answer_sdp`/`answer_from`) when relayed through `POST /calls/{id}/signal/`, so a participant who missed the realtime delivery (different page, reconnecting socket) recovers the signal from `GET /calls/{id}/` when accepting or connecting instead of failing.
 - One active call per participant: initiating while either side is already in a `QUEUED`/`RINGING`/`IN_PROGRESS` session is rejected with `409 call_busy`. Two people calling each other at the same moment are serialized (user-row locks, stable order) — the earlier session wins and the later caller gets a busy message, WhatsApp-style.
+- Missed calls notify: an unanswered ring is marked `NO_ANSWER` (callee app ring timeout, plus a server-side safety net that expires stale `QUEUED`/`RINGING` sessions on list) and creates a persistent, deduped `calls.missed` notification for the callee.
+- Users notice notifications without visiting the center: live unread badge on the sidebar bell and clickable toasts on any page when a `notification.created` realtime event arrives.
 
 ### Notifications — `/notifications`
 

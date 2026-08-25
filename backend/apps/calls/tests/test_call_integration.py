@@ -1,5 +1,8 @@
 import pytest
+from datetime import timedelta
+
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 from twilio.request_validator import RequestValidator
 
@@ -245,3 +248,70 @@ def test_busy_rule_relaxes_once_the_call_ends():
     )
     assert again.status_code == 201
     assert CallSession.objects.count() == 2
+
+
+@pytest.mark.django_db
+def test_missed_call_creates_persistent_notification_for_callee():
+    """A call that is never answered leaves a 'Missed call' notification so the
+    callee knows about it even if they were away from the app."""
+    doctor, nurse, _, _, _ = monitoring_context()
+    doctor_client = APIClient()
+    doctor_client.force_authenticate(doctor)
+    created = doctor_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    session_id = created.json()["id"]
+
+    # The callee's app times out the unanswered ring.
+    nurse_client = APIClient()
+    nurse_client.force_authenticate(nurse)
+    timed_out = nurse_client.post(
+        reverse("calls:call-status", args=[session_id]),
+        {"status": "NO_ANSWER"},
+        format="json",
+    )
+    assert timed_out.status_code == 200
+
+    notification = nurse.notifications.get(category="calls.missed")
+    assert "Samuel" in notification.title or "Missed call" in notification.title
+    assert notification.route == "/calls"
+    assert notification.data["call_session_id"] == session_id
+
+    # Repeating the transition must not duplicate the notification.
+    nurse_client.post(
+        reverse("calls:call-status", args=[session_id]),
+        {"status": "NO_ANSWER"},
+        format="json",
+    )
+    assert nurse.notifications.filter(category="calls.missed").count() == 1
+
+    # The caller receives no missed-call notification, only the callee.
+    assert doctor.notifications.filter(category="calls.missed").count() == 0
+
+
+@pytest.mark.django_db
+def test_stale_ringing_calls_expire_to_no_answer_on_list():
+    """Calls that ring forever (callee app closed) are expired server-side and
+    produce the missed-call notification."""
+    doctor, nurse, _, _, _ = monitoring_context()
+    doctor_client = APIClient()
+    doctor_client.force_authenticate(doctor)
+    created = doctor_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    session_id = created.json()["id"]
+    CallSession.objects.filter(pk=session_id).update(
+        initiated_at=timezone.now() - timedelta(minutes=5)
+    )
+
+    # Any participant listing calls triggers the expiry safety net.
+    response = doctor_client.get(reverse("calls:call-list"))
+    assert response.status_code == 200
+    session = CallSession.objects.get(pk=session_id)
+    assert session.status == CallSession.Status.NO_ANSWER
+    assert session.ended_at is not None
+    assert nurse.notifications.filter(category="calls.missed").exists()

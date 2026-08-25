@@ -13,7 +13,10 @@ import { getNotifications, markAllNotificationsRead, markNotificationRead } from
 export function NotificationsPage() {
   const client = useQueryClient()
   const query = useQuery({ queryKey: ['notifications'], queryFn: () => getNotifications() })
-  const refresh = () => client.invalidateQueries({ queryKey: ['notifications'] })
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: ['notifications'] })
+    void client.invalidateQueries({ queryKey: ['notifications', 'unread'] })
+  }
   const readMutation = useMutation({ mutationFn: markNotificationRead, onSuccess: refresh })
   const allMutation = useMutation({ mutationFn: markAllNotificationsRead, onSuccess: refresh })
   const unread = query.data?.filter((item) => !item.read_at).length ?? 0

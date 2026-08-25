@@ -31,8 +31,10 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { logout } from '../../modules/auth/api/auth-api'
 import { sessionQueryKey, useSession } from '../../modules/auth/hooks/use-session'
+import { useUnreadNotificationCount } from '../../modules/notifications/use-unread-notifications'
 import { AppApiError } from '../../shared/api/errors'
 import { CallOverlay } from '../../shared/calls/CallOverlay'
+import { NotificationToasts } from '../../shared/notifications/NotificationToasts'
 import { RealtimeProvider } from '../providers/RealtimeProvider'
 import { Button } from '../../shared/ui/actions/Button'
 import { Alert } from '../../shared/ui/feedback/Alert'
@@ -137,6 +139,7 @@ export function HospitalShell() {
     },
   })
   const user = session.data!.user
+  const unreadNotifications = useUnreadNotificationCount()
   const navigation = user.role === 'ADMIN'
     ? adminNavigation
     : user.role === 'ACCOUNTING'
@@ -156,6 +159,7 @@ export function HospitalShell() {
     <div className="hospital-shell">
       <RealtimeProvider userId={user.id} />
       <CallOverlay userId={user.id} />
+      <NotificationToasts />
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <header className="mobile-topbar">
         <Brand />
@@ -189,6 +193,11 @@ export function HospitalShell() {
             >
               <Icon size={19} aria-hidden="true" />
               <span>{label}</span>
+              {label === 'Notifications' && unreadNotifications > 0 && (
+                <span className="sidebar__badge" aria-label={`${unreadNotifications} unread notifications`}>
+                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

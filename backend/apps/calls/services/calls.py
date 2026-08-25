@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -7,6 +9,8 @@ from apps.audit.services import record_audit_event
 from apps.calls.models import CallParticipant, CallSession
 from apps.messaging.realtime import publish_user_event
 from apps.messaging.selectors import users_may_communicate
+from apps.notifications.models import Notification
+from apps.notifications.services import notify
 from integrations.twilio.config import get_twilio_settings
 from integrations.twilio.tokens import twilio_identity
 
@@ -180,6 +184,36 @@ def signal_call(*, session, sender, to_user, data, request=None):
 
 
 @transaction.atomic
+def expire_stale_calls(*, max_ring_seconds: int = 45) -> list[CallSession]:
+    """Safety net: calls that never left QUEUED/RINGING (e.g. the callee's app
+    was closed or the ring was never answered) are marked NO_ANSWER after the
+    ring deadline, which also triggers the missed-call notification.
+
+    Called whenever a participant lists calls, so no background worker is
+    required; idempotent and safe under concurrency."""
+    cutoff = timezone.now() - timedelta(seconds=max_ring_seconds)
+    stale = list(
+        CallSession.objects.filter(
+            status__in=[CallSession.Status.QUEUED, CallSession.Status.RINGING],
+            initiated_at__lt=cutoff,
+        )
+    )
+    expired: list[CallSession] = []
+    for session in stale:
+        try:
+            update_call_status(
+                session=session,
+                actor=session.initiated_by,
+                status=CallSession.Status.NO_ANSWER,
+            )
+        except ValidationError:
+            # Another request transitioned the call concurrently; nothing to do.
+            continue
+        expired.append(session)
+    return expired
+
+
+@transaction.atomic
 def update_call_status(*, session, actor, status, request=None):
     locked = CallSession.objects.select_for_update().get(pk=session.pk)
     if not locked.participants.filter(user=actor).exists():
@@ -216,6 +250,27 @@ def update_call_status(*, session, actor, status, request=None):
         locked.ended_at = now
         locked.participants.update(status=CallParticipant.Status.LEFT, left_at=now)
     locked.save(update_fields=["status", "ringing_at", "answered_at", "ended_at", "updated_at"])
+    # A missed call leaves a persistent notification for the callee so they
+    # know about it even if they were away from the app (deduped per session).
+    if status == CallSession.Status.NO_ANSWER:
+        callee = (
+            locked.participants.exclude(user=locked.initiated_by)
+            .select_related("user")
+            .first()
+        )
+        if callee:
+            caller_name = locked.initiated_by.get_full_name()
+            notify(
+                recipient=callee.user,
+                actor=locked.initiated_by,
+                category="calls.missed",
+                severity=Notification.Severity.WARNING,
+                title=f"Missed call from {caller_name}",
+                body="You did not answer this call. It was recorded in your call history.",
+                route="/calls",
+                data={"call_session_id": str(locked.id)},
+                dedupe_key=f"call-missed-{locked.id}",
+            )
     participant_ids = list(locked.participants.values_list("user_id", flat=True))
     transaction.on_commit(
         lambda: [

@@ -192,6 +192,31 @@ describe('callManager incoming calls (any page)', () => {
 
     expect(callManager.getSnapshot().incomingSession).toBeNull()
   })
+
+  it('marks an unanswered ring NO_ANSWER after the ring timeout (missed call)', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(getCall).mockResolvedValue(makeSession({ id: 's1', status: 'RINGING' }))
+      callManager.handleRealtimeEvent({
+        type: 'call.initiated',
+        payload: { call_session_id: 's1', initiated_by: 'them' },
+      })
+      await vi.waitFor(() => {
+        expect(callManager.getSnapshot().incomingSession?.id).toBe('s1')
+      })
+
+      // The callee never answers; after the ring deadline the call is
+      // recorded as NO_ANSWER (the server turns this into a missed-call
+      // notification) and the ring stops.
+      await vi.advanceTimersByTimeAsync(31_000)
+
+      expect(updateCallStatus).toHaveBeenCalledWith('s1', 'NO_ANSWER')
+      expect(callManager.getSnapshot().incomingSession).toBeNull()
+      expect(callManager.getSnapshot().notice).toBe('Missed call')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('callManager accept', () => {

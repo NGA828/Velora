@@ -18,6 +18,9 @@ const ICE_CONFIGURATION: RTCConfiguration = {
 
 const TERMINAL_STATUSES = ['COMPLETED', 'DECLINED', 'CANCELLED', 'FAILED', 'NO_ANSWER']
 
+/** How long the callee's phone rings before the call counts as missed. */
+export const RING_TIMEOUT_MS = 30_000
+
 const NOTICE_BY_STATUS: Record<string, string> = {
   DECLINED: 'The call was declined.',
   CANCELLED: 'The call was cancelled.',
@@ -90,6 +93,7 @@ class CallManager {
   private activeSessionId: string | null = null
   private pollTimer: number | null = null
   private noticeTimer: number | null = null
+  private ringTimer: number | null = null
   private starting = false
   private accepting = false
 
@@ -147,6 +151,7 @@ class CallManager {
   /** Full teardown for logout/unmount. */
   dispose(): void {
     this.stopPolling()
+    this.clearRingTimer()
     this.closePeer()
     stopRingtone()
     this.userId = null
@@ -156,6 +161,33 @@ class CallManager {
     this.starting = false
     this.accepting = false
     this.setState({ ...INITIAL_STATE })
+  }
+
+  private clearRingTimer(): void {
+    if (this.ringTimer !== null) {
+      window.clearTimeout(this.ringTimer)
+      this.ringTimer = null
+    }
+  }
+
+  /**
+   * WhatsApp-style ring timeout: after RING_TIMEOUT_MS the unanswered call is
+   * marked NO_ANSWER (which the server records as a missed-call notification).
+   */
+  private scheduleRingTimeout(sessionId: string): void {
+    this.clearRingTimer()
+    this.ringTimer = window.setTimeout(() => {
+      this.ringTimer = null
+      if (this.state.incomingSession?.id !== sessionId) return
+      stopRingtone()
+      this.setState({ incomingSession: null, notice: 'Missed call' })
+      void updateCallStatus(sessionId, 'NO_ANSWER').catch(() => undefined)
+      if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer)
+      this.noticeTimer = window.setTimeout(() => {
+        this.setState({ notice: '' })
+        this.noticeTimer = null
+      }, 4500)
+    }, RING_TIMEOUT_MS)
   }
 
   // ---------------------------------------------------------------------------
@@ -259,6 +291,7 @@ class CallManager {
   // ---------------------------------------------------------------------------
 
   private endSession(notice = ''): void {
+    this.clearRingTimer()
     this.closePeer()
     this.activeSessionId = null
     stopRingtone()
@@ -364,6 +397,7 @@ class CallManager {
     const incoming = this.state.incomingSession
     if (!incoming || this.accepting) return
     this.accepting = true
+    this.clearRingTimer()
     this.setState({ error: '', notice: '', accepting: true })
     stopRingtone()
     const offer = await this.waitForOffer(incoming.id)
@@ -412,6 +446,7 @@ class CallManager {
   async decline(): Promise<void> {
     const incoming = this.state.incomingSession
     if (!incoming) return
+    this.clearRingTimer()
     stopRingtone()
     this.setState({ incomingSession: null })
     const other = peerId(incoming, this.userId ?? '')
@@ -521,6 +556,7 @@ class CallManager {
   private handleStatusUpdate(sessionId: string, status: string): void {
     if (this.state.incomingSession?.id === sessionId) {
       if (TERMINAL_STATUSES.includes(status)) {
+        this.clearRingTimer()
         stopRingtone()
         this.setState({ incomingSession: null })
       }
@@ -551,6 +587,7 @@ class CallManager {
       if (this.state.activeSession || this.state.incomingSession) return
       this.setState({ incomingSession: session, error: '', notice: '' })
       startRingtone('ring')
+      this.scheduleRingTimeout(sessionId)
     } catch {
       // Transient; the background poll will pick the call up.
     }
@@ -579,6 +616,7 @@ class CallManager {
       if (incoming) {
         this.setState({ incomingSession: incoming, error: '', notice: '' })
         startRingtone('ring')
+        this.scheduleRingTimeout(incoming.id)
       }
     } catch {
       // Transient; try again on the next tick.
