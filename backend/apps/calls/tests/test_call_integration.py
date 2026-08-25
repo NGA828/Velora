@@ -1,6 +1,6 @@
-import pytest
 from datetime import timedelta
 
+import pytest
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -138,6 +138,69 @@ def test_webrtc_offer_and_answer_are_persisted_for_late_accept():
     assert detail.json()["answer_sdp"] == answer
     assert detail.json()["answer_from"] == str(nurse.id)
     assert detail.json()["offer_sdp"] == offer
+
+
+@pytest.mark.django_db
+def test_webrtc_candidates_are_persisted_for_recovery():
+    """ICE candidates are stored so the peer can connect after a missed realtime
+    delivery, without relying on the live WebSocket frame."""
+    doctor, nurse, _, _, _ = monitoring_context()
+    doctor_client = APIClient()
+    doctor_client.force_authenticate(doctor)
+    created = doctor_client.post(
+        reverse("calls:call-list"),
+        {"recipient": str(nurse.id), "provider": "WEBRTC"},
+        format="json",
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    candidate = {
+        "candidate": "candidate:1 1 udp 2122260223 192.0.2.1 54321 typ host generation 0",
+        "sdpMid": "0",
+        "sdpMLineIndex": 0,
+    }
+    signaled = doctor_client.post(
+        reverse("calls:call-signal", args=[session_id]),
+        {
+            "to_user": str(nurse.id),
+            "data": {"type": "candidate", "candidate": candidate},
+        },
+        format="json",
+    )
+    assert signaled.status_code == 202
+
+    nurse_client = APIClient()
+    nurse_client.force_authenticate(nurse)
+    detail = nurse_client.get(reverse("calls:call-detail", args=[session_id]))
+    assert detail.status_code == 200
+    assert detail.json()["ice_candidates"] == [
+        {"from_user": str(doctor.id), "candidate": candidate}
+    ]
+
+
+@pytest.mark.django_db
+def test_ice_config_reports_stun_and_configured_turn(monkeypatch):
+    """The browser fetches STUN/TURN from the backend so deployments can enable
+    TURN (required for cross-network calls) in the environment."""
+    doctor, _, _, _, _ = monitoring_context()
+    monkeypatch.setenv("WEBRTC_TURN_URLS", "turn:turn.example.test:3478")
+    monkeypatch.setenv("WEBRTC_TURN_USERNAME", "velora-user")
+    monkeypatch.setenv("WEBRTC_TURN_CREDENTIAL", "velora-secret")
+
+    client = APIClient()
+    client.force_authenticate(doctor)
+    response = client.get(reverse("calls:call-ice"))
+    assert response.status_code == 200
+
+    servers = response.json()["iceServers"]
+    assert any(
+        "stun:stun.l.google.com:19302" in server["urls"] for server in servers
+    )
+    turn = next(server for server in servers if "turn:" in str(server["urls"]))
+    assert "turn:turn.example.test:3478" in turn["urls"]
+    assert turn["username"] == "velora-user"
+    assert turn["credential"] == "velora-secret"
 
 
 @pytest.mark.django_db

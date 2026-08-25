@@ -80,6 +80,11 @@ class CallSession(UUIDTimeStampedModel):
         null=True,
         blank=True,
     )
+    # ICE candidates are persisted alongside the offer/answer so media can
+    # still connect when a participant missed the realtime channel delivery
+    # (page on another route, transient socket reconnect, or a dropped frame).
+    # Each entry is {"from_user": "<uuid>", "candidate": <RTCIceCandidateInit>}.
+    ice_candidates = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["-initiated_at"]

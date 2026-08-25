@@ -4,6 +4,7 @@ import {
   createCall,
   getCall,
   getCalls,
+  getIceConfig,
   signalCall,
   updateCallStatus,
 } from '../../modules/communication/shared/api'
@@ -15,9 +16,17 @@ vi.mock('../../modules/communication/shared/api', () => ({
   createCall: vi.fn(),
   getCall: vi.fn(),
   getCalls: vi.fn(),
+  getIceConfig: vi.fn(),
   signalCall: vi.fn(),
   updateCallStatus: vi.fn(),
 }))
+
+class FakeRTCIceCandidate {
+  candidate: RTCIceCandidateInit
+  constructor(init: RTCIceCandidateInit) {
+    this.candidate = init
+  }
+}
 
 class FakePeerConnection {
   localDescription: RTCSessionDescription | null = null
@@ -37,9 +46,11 @@ class FakePeerConnection {
   }
   async setLocalDescription(description: RTCSessionDescriptionInit): Promise<void> {
     this.localDescription = description as RTCSessionDescription
+    if (description.type === 'answer') this.connectionState = 'connected'
   }
   async setRemoteDescription(description: RTCSessionDescriptionInit): Promise<void> {
     this.remoteDescription = description as RTCSessionDescription
+    if (description.type === 'answer') this.connectionState = 'connected'
   }
 }
 
@@ -116,8 +127,12 @@ beforeEach(() => {
   vi.mocked(signalCall).mockResolvedValue(undefined)
   vi.mocked(updateCallStatus).mockResolvedValue(makeSession({ id: 'x' }))
   vi.mocked(getCalls).mockResolvedValue([])
+  vi.mocked(getIceConfig).mockResolvedValue({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+  })
   pcInstances = []
   vi.stubGlobal('RTCPeerConnection', FakeRTCPeerConnection)
+  vi.stubGlobal('RTCIceCandidate', FakeRTCIceCandidate)
   Object.defineProperty(navigator, 'mediaDevices', {
     value: { getUserMedia: vi.fn().mockResolvedValue(fakeStream()) },
     configurable: true,
@@ -397,6 +412,42 @@ describe('callManager outgoing calls', () => {
       expect(callManager.getSnapshot().phase).not.toBe('ringing')
     })
     expect(lastPC()?.remoteDescription?.sdp).toBe('callee-answer-sdp')
+  })
+
+  it('applies server-persisted ICE candidates when the realtime candidate frames are lost', async () => {
+    const created = makeSession({ id: 's9', initiated_by: 'me', status: 'QUEUED' })
+    vi.mocked(createCall).mockResolvedValue(created)
+    const answered = makeSession({
+      id: 's9',
+      initiated_by: 'me',
+      status: 'IN_PROGRESS',
+      answer_sdp: 'server-answer-sdp',
+      answer_from: 'them',
+      ice_candidates: [
+        {
+          from_user: 'them',
+          candidate: {
+            candidate: 'candidate:1 1 udp 2122260223 192.0.2.1 54321 typ host generation 0',
+            sdpMid: '0',
+            sdpMLineIndex: 0,
+          },
+        },
+      ],
+    })
+    vi.mocked(getCall).mockResolvedValue(answered)
+
+    await callManager.startCall('them')
+    callManager.handleRealtimeEvent({
+      type: 'call.updated',
+      payload: { call_session_id: 's9', status: 'IN_PROGRESS' },
+    })
+
+    await vi.waitFor(() => {
+      expect(lastPC()?.remoteDescription?.sdp).toBe('server-answer-sdp')
+    })
+    await vi.waitFor(() => {
+      expect(lastPC()?.addIceCandidate).toHaveBeenCalled()
+    })
   })
 
   it('shows a clear busy message when the recipient is already in a call', async () => {

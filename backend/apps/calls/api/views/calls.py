@@ -26,6 +26,7 @@ from apps.common.throttling import ActionScopedThrottleMixin
 from apps.messaging.models import Conversation
 from integrations.twilio.config import get_twilio_settings
 from integrations.twilio.tokens import create_voice_token, twilio_identity
+from integrations.webrtc.config import get_webrtc_settings
 
 User = get_user_model()
 
@@ -82,6 +83,11 @@ class CallSessionViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
         return Response({"available": get_twilio_settings().available})
 
     @action(detail=False, methods=["get"])
+    def ice(self, request):
+        """ICE servers (STUN/TURN) for the browser's RTCPeerConnection."""
+        return Response({"iceServers": get_webrtc_settings().ice_servers})
+
+    @action(detail=False, methods=["get"])
     def token(self, request):
         if not get_twilio_settings().available:
             return unavailable_response()
@@ -98,7 +104,10 @@ class CallSessionViewSet(ActionScopedThrottleMixin, ReadOnlyModelViewSet):
         # explicit in-app WebRTC call is permitted; everything else reports
         # the integration as unavailable.
         requested_provider = (request.data.get("provider") or "").upper()
-        if not get_twilio_settings().available and requested_provider != CallSession.Provider.WEBRTC:
+        if (
+            not get_twilio_settings().available
+            and requested_provider != CallSession.Provider.WEBRTC
+        ):
             return unavailable_response()
         serializer = CallCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

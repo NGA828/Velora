@@ -808,6 +808,7 @@ small { font-size: 0.8rem; }
 .call-bar__copy { display: flex; flex-direction: column; align-items: flex-start; flex: 1; min-width: 0; }
 .call-bar__copy strong { font-size: .92rem; }
 .call-bar__copy small { color: var(--color-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.call-bar__copy .call-bar__error { color: var(--color-critical); margin-top: 2px; white-space: normal; line-height: 1.35; }
 .call-bar audio { display: none; }
 .call-toast { position: fixed; left: 50%; bottom: 84px; z-index: 1150; transform: translateX(-50%); padding: 10px 16px; border-radius: 12px; background: var(--color-text); color: #fff; box-shadow: var(--shadow-lg); font-size: .85rem; animation: call-toast-in .18s ease-out; }
 @keyframes call-toast-in { from { opacity: 0; transform: translate(-50%, 6px); } }
