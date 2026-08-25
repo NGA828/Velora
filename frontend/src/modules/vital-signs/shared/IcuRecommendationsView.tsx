@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { Activity, BedDouble, BrainCircuit, ShieldAlert, Stethoscope, UserRound } from 'lucide-react'
+import { Activity, BedDouble, BrainCircuit, MessageSquare, ShieldAlert, Stethoscope, UserRound } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Alert } from '../../../shared/ui/feedback/Alert'
 import { EmptyState } from '../../../shared/ui/feedback/EmptyState'
 import { SectionLoader } from '../../../shared/ui/feedback/SectionLoader'
 import { PageHeader } from '../../../shared/ui/navigation/PageHeader'
+import { ClinicalAssistantDrawer } from '../../clinical-assistant/components/ClinicalAssistantDrawer'
 import { getIcuRecommendations } from './api'
 import type { IcuRecommendation } from './types'
 
@@ -32,11 +34,15 @@ function RecommendationCard({
   patientName,
   observedAt,
   recommendation,
+  onOpenAssistant,
+  rolePath,
 }: {
   patientId: string
   patientName: string
   observedAt: string
   recommendation: IcuRecommendation
+  onOpenAssistant: () => void
+  rolePath: 'doctor' | 'nurse'
 }) {
   const specialistTone = statusTone(recommendation.specialist_status)
   const bedTone = statusTone(recommendation.icu_bed_status)
@@ -90,9 +96,21 @@ function RecommendationCard({
       <p className="icu-card__explanation">{recommendation.explanation}</p>
       <footer className="icu-card__footer">
         <span>
-          <Activity size={14} /> AI decision support · {new Date(recommendation.generated_at).toLocaleString()}
+          <Activity size={14} /> Decision Support · {new Date(recommendation.generated_at).toLocaleString()}
         </span>
-        <Link to={`/doctor/patients/${patientId}/vitals`}>Open vitals</Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <button
+            type="button"
+            className="button button--ghost"
+            style={{ padding: '4px 10px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+            onClick={onOpenAssistant}
+          >
+            <MessageSquare size={14} /> Ask Assistant
+          </button>
+          <Link to={rolePath === 'doctor' ? `/doctor/patients/${patientId}/vitals` : `/nurse/patients/${patientId}/vitals`}>
+            Open vitals
+          </Link>
+        </div>
       </footer>
     </article>
   )
@@ -106,6 +124,8 @@ function RecommendationCard({
  * overloaded or absent.
  */
 export function IcuRecommendationsView({ rolePath }: { rolePath: 'doctor' | 'nurse' }) {
+  const [selectedPatient, setSelectedPatient] = useState<{ id: string; name: string } | null>(null)
+
   const query = useQuery({
     queryKey: ['icu-recommendations'],
     queryFn: getIcuRecommendations,
@@ -116,7 +136,7 @@ export function IcuRecommendationsView({ rolePath }: { rolePath: 'doctor' | 'nur
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow="Intensive care · AI decision support"
+        eyebrow="Intensive care · Decision support"
         title="ICU recommendations"
         description="Automated recommendations generated from the latest critical vital-sign assessments, specialist availability and intensive-care bed capacity."
       />
@@ -142,6 +162,8 @@ export function IcuRecommendationsView({ rolePath }: { rolePath: 'doctor' | 'nur
               patientName={item.patient_name}
               observedAt={item.observed_at}
               recommendation={item.icu_recommendation!}
+              rolePath={rolePath}
+              onOpenAssistant={() => setSelectedPatient({ id: item.patient, name: item.patient_name })}
             />
           ))}
         </div>
@@ -151,6 +173,16 @@ export function IcuRecommendationsView({ rolePath }: { rolePath: 'doctor' | 'nur
           ? 'Recommendations refresh automatically. They support — never replace — clinical judgment.'
           : 'Recommendations refresh automatically and support the clinical team’s decisions.'}
       </p>
+
+      {selectedPatient && (
+        <ClinicalAssistantDrawer
+          open={Boolean(selectedPatient)}
+          onClose={() => setSelectedPatient(null)}
+          patientId={selectedPatient.id}
+          patientName={selectedPatient.name}
+          initialPrompt="Why was this patient flagged for ICU assessment?"
+        />
+      )}
     </div>
   )
 }
@@ -158,7 +190,7 @@ export function IcuRecommendationsView({ rolePath }: { rolePath: 'doctor' | 'nur
 export function IcuRecommendationNotice() {
   return (
     <p className="icu-notice">
-      <ShieldAlert size={15} /> AI-generated decision support. Always confirm with the attending clinician.
+      <ShieldAlert size={15} /> Clinical decision support. Always confirm with the attending clinician.
     </p>
   )
 }
