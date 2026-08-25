@@ -34,6 +34,7 @@ type SignalData =
   | { type: 'answer'; sdp: string }
   | { type: 'candidate'; candidate: RTCIceCandidateInit }
   | { type: 'bye' }
+  | { type: 'request_offer' }
 
 type CallPhase = 'idle' | 'ringing' | 'incoming' | 'connecting' | 'active' | 'ended'
 
@@ -220,7 +221,13 @@ export function CallsPage() {
       setError('')
       const offer = offersRef.current[incoming.id]
       if (!offer) {
-        setError('The call invitation expired. Ask the caller to try again.')
+        const other = peerId(incoming, user.id)
+        if (other) {
+          void signalCall(incoming.id, other, { type: 'request_offer' }).catch(() => undefined)
+          setError('Recovering connection... Please wait a moment and click Accept again.')
+        } else {
+          setError('The call invitation expired. Ask the caller to try again.')
+        }
         return
       }
       activeSessionIdRef.current = incoming.id
@@ -310,6 +317,17 @@ export function CallsPage() {
       closePeer()
       setPhase('ended')
       resetToIdle()
+      return
+    }
+    if (data.type === 'request_offer') {
+      const pc = pcRef.current
+      if (sessionId === activeSessionIdRef.current && pc?.localDescription) {
+        const other = peerId(activeSessionRef.current!, userIdRef.current)
+        if (other) {
+          void signalCall(sessionId, other, { type: 'offer', sdp: pc.localDescription.sdp }).catch(() => undefined)
+        }
+      }
+      return
     }
   })
 

@@ -25,7 +25,7 @@ class HospitalProfile(UUIDTimeStampedModel):
     class Meta:
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(singleton_key=1),
+                check=models.Q(singleton_key=1),
                 name="hospital_profile_singleton_key_is_one",
             )
         ]

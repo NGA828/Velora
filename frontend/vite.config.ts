@@ -10,14 +10,24 @@ export default defineConfig({
     // Pre-bundle these so the dependency optimizer does not re-run (and change
     // its ?v= cache-busting hash) on routine edits, which otherwise leaves the
     // browser holding stale /node_modules/.vite/deps URLs behind a blank screen.
+    //
+    // noDiscovery prevents the optimizer from scanning for new deps at runtime,
+    // which would trigger a re-run and invalidate every cached module URL.
+    // If a new dependency causes an error, add it to the include list below.
+    noDiscovery: true,
     include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
       'react-router-dom',
       '@tanstack/react-query',
       'axios',
       'zod',
       'react-hook-form',
       '@hookform/resolvers',
+      '@hookform/resolvers/zod',
       'lucide-react',
+      '@twilio/voice-sdk',
     ],
   },
   server: {

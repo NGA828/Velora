@@ -9,6 +9,33 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Recovery script: if a stale-cached module fails to load (Vite returns 504
+      "Outdated Optimize Dep"), reload once with cache-busting. A sessionStorage
+      flag prevents an infinite reload loop.
+    -->
+    <script>
+      (function () {
+        var FLAG = '__velora_reload';
+        window.addEventListener('error', function (e) {
+          if (
+            e.message &&
+            (e.message.indexOf('Failed to fetch dynamically imported module') !== -1 ||
+             e.message.indexOf('Importing a module script failed') !== -1 ||
+             e.message.indexOf('error loading dynamically imported module') !== -1)
+          ) {
+            if (!sessionStorage.getItem(FLAG)) {
+              sessionStorage.setItem(FLAG, '1');
+              location.reload();
+            }
+          }
+        });
+        // Clear the flag on a successful load so future reloads can recover again.
+        window.addEventListener('load', function () {
+          sessionStorage.removeItem(FLAG);
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 
+import { AppErrorBoundary } from './app/error-boundaries/AppErrorBoundary'
 import { AppProviders } from './app/providers/AppProviders'
 import { createAppRouter } from './app/router'
 import './shared/styles/tokens.css'
@@ -15,9 +16,11 @@ const root = createRoot(container)
 function render() {
   root.render(
     <StrictMode>
-      <AppProviders>
-        <RouterProvider router={router} />
-      </AppProviders>
+      <AppErrorBoundary>
+        <AppProviders>
+          <RouterProvider router={router} />
+        </AppProviders>
+      </AppErrorBoundary>
     </StrictMode>,
   )
 }
