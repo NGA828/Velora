@@ -653,8 +653,8 @@ class CallManager {
 
   /**
    * Background safety net: surfaces incoming calls and reflects server-side
-   * terminal states even when the realtime socket is down or events were
-   * missed while the page was on another route.
+   * states even when the realtime socket is down or events were missed while
+   * the page was on another route.
    */
   private async pollForIncoming(): Promise<void> {
     if (!this.userId) return
@@ -665,6 +665,20 @@ class CallManager {
         if (current && TERMINAL_STATUSES.includes(current.status)) {
           this.endSession(NOTICE_BY_STATUS[current.status] ?? '')
           return
+        }
+        // The peer answered on the server (IN_PROGRESS), but our realtime
+        // `call.signal` (answer) and `call.updated` (IN_PROGRESS) events never
+        // arrived — e.g. the socket reconnected or the channel-layer message
+        // was dropped. Without this recovery the caller stays stuck on
+        // "Ringing…" and the WebRTC answer is never applied, so the two ends
+        // never actually connect even though the callee is already "active".
+        // handleStatusUpdate both leaves ringing and recovers the answer.
+        if (
+          current &&
+          current.status === 'IN_PROGRESS' &&
+          (this.state.phase === 'ringing' || this.state.phase === 'connecting')
+        ) {
+          this.handleStatusUpdate(this.activeSessionId, 'IN_PROGRESS')
         }
       }
       if (this.state.activeSession || this.state.incomingSession) return
