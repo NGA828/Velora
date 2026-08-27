@@ -138,17 +138,17 @@ export function LandingPage() {
               </Link>
             ) : (
               <>
-                <Link to="/login" className="lp-button lp-button--ghost">
+                <Link to="/login" className="lp-button lp-button--ghost landing-nav__login">
                   Log in
                 </Link>
-                <a href="#platform" className="lp-button lp-button--primary">
+                <a href="#platform" className="lp-button lp-button--primary landing-nav__explore">
                   Explore the platform
                 </a>
               </>
             )}
             <button
               type="button"
-              className="lp-button lp-button--ghost"
+              className="lp-button lp-button--ghost landing-nav__menu"
               aria-label={menuOpen ? 'Close menu' : 'Open menu'}
               onClick={() => setMenuOpen((open) => !open)}
               style={{ padding: '10px 14px' }}

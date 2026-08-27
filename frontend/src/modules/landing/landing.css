@@ -111,6 +111,11 @@
   gap: 12px;
 }
 
+/* Hamburger toggle is mobile-only (section links are always in the menu) */
+.landing-nav__menu {
+  display: none;
+}
+
 /* ------------------------------- Buttons --------------------------------- */
 
 .lp-button {
@@ -1071,10 +1076,15 @@
 
 /* ------------------------------ Responsive ------------------------------- */
 
+/* Large tablets / small laptops */
 @media (max-width: 1024px) {
   .lp-hero__inner {
     grid-template-columns: 1fr;
     gap: 60px;
+  }
+
+  .lp-hero__sub {
+    max-width: 40rem;
   }
 
   .lp-float-card--vitals { left: 0; }
@@ -1094,19 +1104,106 @@
   }
 }
 
-@media (max-width: 720px) {
-  .lp-hero {
-    padding-top: 120px;
+/* Tablets */
+@media (max-width: 900px) {
+  .lp-section {
+    padding: 68px 0;
   }
 
-  .lp-nav-links {
-    display: none;
+  .lp-section__head {
+    margin-bottom: 40px;
   }
 
-  .lp-stats,
+  .lp-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .lp-steps,
   .lp-testimonials {
     grid-template-columns: 1fr;
+  }
+
+  .lp-cta {
+    padding: 24px 0 84px;
+  }
+
+  .lp-cta__panel {
+    padding: 56px 28px;
+  }
+}
+
+/* Phones */
+@media (max-width: 720px) {
+  .lp-hero {
+    padding: 112px 0 64px;
+  }
+
+  .lp-hero__title {
+    font-size: clamp(2rem, 8vw, 2.6rem);
+  }
+
+  .lp-hero__actions {
+    gap: 10px;
+  }
+
+  .lp-hero__proof {
+    flex-wrap: wrap;
+  }
+
+  .landing-nav__links {
+    display: none;
+  }
+
+  /* Keep the compact login CTA + menu toggle; the explore CTA lives in the menu */
+  .landing-nav__explore {
+    display: none;
+  }
+
+  .landing-nav__login {
+    padding: 10px 16px;
+    min-height: 42px;
+  }
+
+  .landing-nav__menu {
+    display: inline-flex;
+    min-height: 42px;
+    padding: 10px 12px;
+  }
+
+  .lp-float-card {
+    padding: 9px 12px;
+    gap: 9px;
+    border-radius: 13px;
+  }
+
+  .lp-float-card__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+
+  .lp-float-card strong {
+    font-size: 0.92rem;
+  }
+
+  .lp-float-card__spark {
+    width: 58px;
+    height: 20px;
+  }
+
+  .lp-float-card--vitals {
+    top: 5%;
+    left: 8px;
+  }
+
+  .lp-float-card--icu {
+    bottom: 5%;
+    right: 8px;
+  }
+
+  .lp-ecg {
+    height: 54px;
+    opacity: 0.4;
   }
 
   .lp-bento {
@@ -1122,8 +1219,77 @@
     min-height: 200px;
   }
 
+  .lp-bento__cell--media {
+    min-height: 230px;
+  }
+
+  .lp-chat-demo {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .lp-chat-msg {
+    max-width: 92%;
+  }
+
   .lp-footer__grid {
     grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .lp-cta__panel {
+    padding: 46px 20px;
+    border-radius: 22px;
+  }
+
+  .lp-cta__actions .lp-button {
+    width: 100%;
+  }
+}
+
+/* Small phones */
+@media (max-width: 520px) {
+  .lp-section {
+    padding: 52px 0;
+  }
+
+  .lp-hero {
+    padding-top: 104px;
+  }
+
+  .landing-brand small {
+    display: none;
+  }
+
+  .lp-hero__actions .lp-button,
+  .lp-hero__actions {
+    width: 100%;
+  }
+
+  .lp-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .lp-stat {
+    padding: 22px 18px;
+  }
+
+  .lp-stat strong {
+    font-size: 1.9rem;
+  }
+
+  .lp-float-card--icu small:last-child {
+    display: none;
+  }
+
+  .lp-marquee__track {
+    gap: 44px;
+    animation-duration: 24s;
+  }
+
+  .lp-testimonial,
+  .lp-step {
+    padding: 22px 18px;
   }
 }
 
