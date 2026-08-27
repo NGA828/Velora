@@ -1,7 +1,26 @@
 """ASGI entry point for HTTP and authenticated WebSocket traffic."""
 
 import os
+from pathlib import Path
 
+
+def _load_dotenv() -> None:
+    """Load .env from the repository root before Django settings are imported.
+
+    ``override=False`` lets real OS/PaaS environment variables win over the
+    .env file, so the same code works for both local dev and production.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return  # python-dotenv is a dev-only dependency; skip silently in prod
+
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if env_path.is_file():
+        load_dotenv(env_path, override=False)
+
+
+_load_dotenv()
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 
 from channels.auth import AuthMiddlewareStack  # noqa: E402
