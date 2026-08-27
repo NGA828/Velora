@@ -36,6 +36,7 @@ export function useClinicalAssistant(patientId: string) {
   const userRole = session.data?.user.role
 
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(undefined)
+  const [pendingMessages, setPendingMessages] = useState<string[]>([])
 
   // 1. Fetch Clinical Context for this patient
   const contextQuery = useQuery({
@@ -57,13 +58,32 @@ export function useClinicalAssistant(patientId: string) {
   const currentMessages: AssistantMessage[] = currentSession?.messages || []
   const sessionId = activeSessionId || currentSession?.id
 
+  // Optimistic view: show the user's in-flight questions immediately so the
+  // conversation never feels stuck while the model is generating.
+  const optimisticMessages: AssistantMessage[] = pendingMessages.map((text, index) => ({
+    id: `pending-${index}-${text.length}`,
+    role: 'user',
+    content: text,
+    validation_passed: true,
+    created_at: new Date().toISOString(),
+  }))
+  const messages = [...currentMessages, ...optimisticMessages]
+
   // 3. Send Message Mutation
   const sendMutation = useMutation({
     mutationFn: (messageText: string) => sendChatMessage(patientId, messageText, sessionId),
+    onMutate: (messageText) => {
+      setPendingMessages((prev) => [...prev, messageText])
+    },
     onSuccess: (data) => {
       setActiveSessionId(data.session_id)
       queryClient.invalidateQueries({ queryKey: ['clinical-assistant-sessions', patientId] })
       queryClient.invalidateQueries({ queryKey: ['clinical-assistant-context', patientId] })
+    },
+    onSettled: () => {
+      // Remove the oldest pending message whether it succeeded (the refetched
+      // session now contains it) or failed (the error alert explains why).
+      setPendingMessages((prev) => prev.slice(1))
     },
   })
 
@@ -90,7 +110,7 @@ export function useClinicalAssistant(patientId: string) {
     userRole,
     context: contextQuery.data || null,
     isContextLoading: contextQuery.isPending,
-    messages: currentMessages,
+    messages,
     isMessagesLoading: sessionsQuery.isPending,
     sendMessage: (text: string) => sendMutation.mutate(text),
     isSending: sendMutation.isPending,

@@ -58,6 +58,11 @@ export function ClinicalAssistantDrawer({
     }
   }, [open, initialPrompt, messages.length, isMessagesLoading, sendMessage])
 
+  const errorMessage =
+    sendError instanceof Error
+      ? `${sendError.message} Your message was not delivered — please try again.`
+      : 'Your message was not delivered — please try again.'
+
   if (!open) return null
 
   const isGuardian = userRole === 'PATIENT_GUARD'
@@ -175,13 +180,15 @@ export function ClinicalAssistantDrawer({
                 </article>
               )}
 
-              {sendError && (
-                <Alert tone="critical" title="Unable to send message">
-                  {sendError instanceof Error ? sendError.message : 'Please try again.'}
-                </Alert>
-              )}
-
               <div ref={messagesEndRef} />
+            </div>
+          )}
+
+          {sendError && (
+            <div className="assistant-error-wrap">
+              <Alert tone="critical" title="Unable to send message">
+                {errorMessage}
+              </Alert>
             </div>
           )}
         </div>

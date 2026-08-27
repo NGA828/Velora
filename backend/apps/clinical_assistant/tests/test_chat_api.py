@@ -18,7 +18,7 @@ from apps.vital_signs.tests.test_icu_recommendations import setup_icu_patient
 
 
 @pytest.mark.django_db
-@patch("apps.clinical_assistant.services.deepseek_service.requests.post")
+@patch("apps.clinical_assistant.services.llm_service.requests.post")
 def test_doctor_chat_endpoint_success(mock_post):
     from apps.clinical_assistant.services.deepseek_service import deepseek_service
     deepseek_service.api_key = "mock-test-key"
@@ -102,7 +102,7 @@ def test_unauthorized_user_chat_rejected():
 
 
 @pytest.mark.django_db
-@patch("apps.clinical_assistant.services.deepseek_service.requests.post")
+@patch("apps.clinical_assistant.services.llm_service.requests.post")
 def test_patient_guard_chat_endpoint_success(mock_post):
     from apps.clinical_assistant.services.deepseek_service import deepseek_service
     deepseek_service.api_key = "mock-test-key"

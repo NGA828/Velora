@@ -170,6 +170,25 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 
+# Conversational assistant LLM provider (OpenAI-compatible chat completions).
+# Free-tier providers: groq, gemini, openrouter, cerebras, mistral, sambanova.
+# The assistant degrades to a deterministic fallback message when no key is set,
+# so the ICU Recommendation System is never dependent on external AI.
+AI_PROVIDER = os.getenv("AI_PROVIDER", "")
+AI_API_KEY = os.getenv("AI_API_KEY", "")
+AI_MODEL = os.getenv("AI_MODEL", "")
+AI_BASE_URL = os.getenv("AI_BASE_URL", "")
+AI_TIMEOUT = os.getenv("AI_TIMEOUT", "30")
+AI_FALLBACK_PROVIDER = os.getenv("AI_FALLBACK_PROVIDER", "")
+AI_FALLBACK_MODEL = os.getenv("AI_FALLBACK_MODEL", "")
+AI_FALLBACK_BASE_URL = os.getenv("AI_FALLBACK_BASE_URL", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "")
+SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY", "")
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels.layers.InMemoryChannelLayer",

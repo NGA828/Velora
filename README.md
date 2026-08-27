@@ -73,6 +73,25 @@ npm run dev
 
 Open `http://localhost:5173`. Browser requests use relative `/api` paths; Vite proxies them to Django.
 
+The public **landing page** is served at `/` — an animated, Dribbble-inspired marketing page (3D tilt hero, scroll reveals, parallax, generated imagery) with a **Log in** call to action that leads to `/login`. After signing in, users land on their role workspace at `/workspace`.
+
+### 3. Conversational Clinical Assistant (free AI)
+
+The assistant explains official ICU recommendations and authorized patient information in plain language. It runs on any OpenAI-compatible provider, and the free tiers of Groq, Google Gemini, Cerebras, Mistral, SambaNova, and OpenRouter all comfortably exceed the ~20 messages/day requirement — see [Free AI providers](docs/FREE_AI_PROVIDERS.md) for current limits and key setup.
+
+Recommended free setup (no credit card):
+
+```bash
+export AI_PROVIDER=groq
+export GROQ_API_KEY=gsk_...              # https://console.groq.com/keys
+export AI_FALLBACK_PROVIDER=gemini       # optional automatic failover
+export GEMINI_API_KEY=AIza...            # https://aistudio.google.com
+```
+
+Without any key the assistant returns a deterministic fallback message and the ICU Recommendation System keeps working normally. Legacy `DEEPSEEK_API_KEY` deployments are still supported.
+
+Patient Guards also get a dedicated **Clinical Assistant** entry in their sidebar (`/patient-guard/assistant`) for conversations about the patients they are authorized to follow.
+
 Run the idempotent medication-due worker in another terminal when testing active prescriptions:
 
 ```bash

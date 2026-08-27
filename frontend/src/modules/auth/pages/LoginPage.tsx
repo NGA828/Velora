@@ -34,9 +34,12 @@ export function LoginPage() {
       const session = await mutation.mutateAsync(values)
       queryClient.setQueryData(sessionQueryKey, session)
       const requestedPath = (location.state as { from?: string } | null)?.from
-      navigate(session.user.must_change_password ? '/change-password' : requestedPath || '/', {
-        replace: true,
-      })
+      navigate(
+        session.user.must_change_password ? '/change-password' : requestedPath || '/workspace',
+        {
+          replace: true,
+        },
+      )
     } catch {
       form.setFocus('email')
     }
