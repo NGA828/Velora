@@ -1,0 +1,1766 @@
+{
+  "info": {
+    "_postman_id": "b7e4c1a0-velora-api-4f21-9c0d-2a1b3c4d5e6f",
+    "name": "Velora Hospital Management API",
+    "description": "Velora API \u2014 Django REST Framework, session authentication + CSRF.\n\nHOW TO USE\n1. Start the backend: uvicorn config.asgi:application --port 8000\n2. Run 'Get CSRF token', then 'Login' (folder 0). Postman's cookie jar keeps the session automatically.\n3. Everything else just works \u2014 the collection auto-attaches X-CSRFToken on POST/PUT/PATCH/DELETE and refreshes it after login (Django rotates it).\n\nDemo accounts (seed_demo): admin/head/doctor/nurse/guard/accounts @velora.com \u2014 password123.\nClinical writes (e.g. creating patients) are role-scoped: use doctor@velora.com or nurse@velora.com. Admin sees staff/reports/billing.\n\nTip: list requests auto-capture IDs (patient_id, department_id, nurse_id, ...) into collection variables used by the create/detail requests. Run lists before creates.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Attach the CSRF token header automatically on unsafe methods.",
+          "const unsafe = [\"POST\", \"PUT\", \"PATCH\", \"DELETE\"];",
+          "if (unsafe.includes(pm.request.method.toUpperCase())) {",
+          "  let token = pm.collectionVariables.get(\"csrf_token\");",
+          "  if (!token) { try { token = pm.cookies.get(\"velora_csrftoken\"); } catch (e) {} }",
+          "  if (token) { pm.request.headers.upsert({ key: \"X-CSRFToken\", value: token }); }",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// keep HTTP status visible in results"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "default"
+    },
+    {
+      "key": "email",
+      "value": "admin@velora.com",
+      "type": "any"
+    },
+    {
+      "key": "password",
+      "value": "password123",
+      "type": "any"
+    },
+    {
+      "key": "csrf_token",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "staff_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "nurse_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "department_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "patient_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "prescription_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "conversation_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "thread_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "notification_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "transfer_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "invitation_id",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "diagnosis_id",
+      "value": "",
+      "type": "any"
+    }
+  ],
+  "item": [
+    {
+      "name": "0 \u00b7 Setup & Auth",
+      "item": [
+        {
+          "name": "Health check (no auth)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "1 \u00b7 Get CSRF token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/csrf/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "csrf"
+              ]
+            },
+            "description": "Sets the csrf_token collection variable from the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"CSRF issued\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "if (body.csrf_token) { pm.collectionVariables.set(\"csrf_token\", body.csrf_token); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 \u00b7 Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "rawLanguage": "json"
+              }
+            },
+            "description": "Saves the rotated CSRF token + user_id after a successful login."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Login OK\", () => pm.response.to.have.status(200));",
+                  "// Django rotates the CSRF token on login: re-read it from the cookie jar.",
+                  "const rotated = pm.cookies.get(\"velora_csrftoken\");",
+                  "if (rotated) { pm.collectionVariables.set(\"csrf_token\", rotated); }",
+                  "try { pm.collectionVariables.set(\"user_id\", pm.response.json().user.id); } catch (e) {}",
+                  "pm.test(\"User authenticated\", () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.user).to.have.property(\"email\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 \u00b7 Current session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/session/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "session"
+              ]
+            }
+          }
+        },
+        {
+          "name": "My profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update my profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Amara\",\n  \"phone\": \"+237 600 000 001\"\n}",
+              "options": {
+                "rawLanguage": "json"
+              }
+            }
+          }
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/password/change/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "password",
+                "change"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"old_password\": \"password123\",\n  \"new_password\": \"a-long-new-password-1\"\n}",
+              "options": {
+                "rawLanguage": "json"
+              }
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Returns 204. Run 'Get CSRF token' + 'Login' again to re-authenticate."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 \u00b7 Identity & Staff",
+      "item": [
+        {
+          "name": "Staff list",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "staff"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"staff_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/{{staff_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "staff",
+                "{{staff_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Clinical directory (captures a nurse)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/clinical-directory/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "staff",
+                "clinical-directory"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"nurse_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff invitations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/invitations/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "staff",
+                "invitations"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"invitation_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invite staff",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/invitations/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "staff",
+                "invitations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.doctor@velora.com\",\n  \"first_name\": \"New\",\n  \"last_name\": \"Doctor\",\n  \"role\": \"DOCTOR\",\n  \"job_title\": \"Cardiologist\"\n}",
+              "options": {
+                "rawLanguage": "json"
+              }
+            }
+          }
+        },
+        {
+          "name": "Revoke invitation",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/invitations/{{invitation_id}}/revoke/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "staff",
+                "invitations",
+                "{{invitation_id}}",
+                "revoke"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Accept invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/invitations/accept/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "invitations",
+                "accept"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitation_id\": \"\",\n  \"first_name\": \"\",\n  \"last_name\": \"\",\n  \"password\": \"\"\n}",
+              "options": {
+                "rawLanguage": "json"
+              }
+            }
+          }
+        }
+      ],
+      "description": "Admin-only in practice."
+    },
+    {
+      "name": "2 \u00b7 Hospital",
+      "item": [
+        {
+          "name": "API index (lists all hospital endpoints)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hospital/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hospital"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Hospital profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hospital/profile/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hospital",
+                "profile"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Hospital dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hospital/dashboard/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hospital",
+                "dashboard"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Patients dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/patients/dashboard/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "patients",
+                "dashboard"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Departments (captures department_id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hospital/departments/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hospital",
+                "departments"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"department_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rooms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hospital/rooms/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hospital",
+                "rooms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Beds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hospital/beds/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hospital",
+                "beds"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Services",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hospital/services/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hospital",
+                "services"
+              ]
+            }
+          }
+        },
+        {
+          "name": "External hospitals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hospital/external-hospitals/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hospital",
+                "external-hospitals"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 \u00b7 Patients",
+      "item": [
+        {
+          "name": "Patient list (captures patient_id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/patients/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "patients"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"patient_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create patient (DOCTOR/HEAD role)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/patients/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "patients"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Test\",\n  \"last_name\": \"Postman\",\n  \"date_of_birth\": \"1990-05-01\",\n  \"sex_at_birth\": \"FEMALE\",\n  \"address\": \"12 Rue de la Paix\",\n  \"emergency_contact_name\": \"Kiki Postman\",\n  \"emergency_contact_phone\": \"+237 600 000 999\",\n  \"assigned_nurse\": \"{{nurse_id}}\",\n  \"department\": \"{{department_id}}\",\n  \"episode_type\": \"INPATIENT\",\n  \"admission_reason\": \"Postman API smoke test\"\n}",
+              "options": {
+                "rawLanguage": "json"
+              }
+            },
+            "description": "Needs {{department_id}} and {{nurse_id}}: run 'Departments' and 'Clinical directory' first, and login as doctor@velora.com."
+          }
+        },
+        {
+          "name": "Patient detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/patients/{{patient_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "patients",
+                "{{patient_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update patient",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/patients/{{patient_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "patients",
+                "{{patient_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"Updated via Postman\"\n}",
+              "options": {
+                "rawLanguage": "json"
+              }
+            }
+          }
+        },
+        {
+          "name": "Patient guardians",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/patients/{{patient_id}}/guardians/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "patients",
+                "{{patient_id}}",
+                "guardians"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assign primary nurse (DOCTOR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/patients/{{patient_id}}/assign-nurse/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "patients",
+                "{{patient_id}}",
+                "assign-nurse"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nurse\": \"{{nurse_id}}\"\n}",
+              "options": {
+                "rawLanguage": "json"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 \u00b7 Clinical Records",
+      "item": [
+        {
+          "name": "Medical files",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/medical-files/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medical-files"
+              ]
+            }
+          }
+        },
+        {
+          "name": "File attachments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/medical-file-attachments/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medical-file-attachments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Allergies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/allergies/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "allergies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Medical history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/medical-history/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medical-history"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Diagnoses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/diagnoses/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "diagnoses"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"diagnosis_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Diagnosis detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/diagnoses/{{diagnosis_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "diagnoses",
+                "{{diagnosis_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Treatment plans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/treatment-plans/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "treatment-plans"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Clinical notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/clinical-notes/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clinical-notes"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 \u00b7 Prescriptions",
+      "item": [
+        {
+          "name": "Medications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/medications/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medications"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Prescriptions (captures prescription_id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/prescriptions/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "prescriptions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"prescription_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prescription detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/prescriptions/{{prescription_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "prescriptions",
+                "{{prescription_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Medication doses (administration)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/medication-doses/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medication-doses"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 \u00b7 Vitals & Monitoring",
+      "item": [
+        {
+          "name": "Vital metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vital-metrics/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vital-metrics"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Vital rule sets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vital-rule-sets/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vital-rule-sets"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Vital rules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vital-rules/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vital-rules"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Vital observations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vital-observations/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vital-observations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "ICU recommendations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vital-observations/icu-recommendations/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vital-observations",
+                "icu-recommendations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Monitoring threads (captures thread_id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/monitoring-threads/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "monitoring-threads"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"thread_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monitoring thread detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/monitoring-threads/{{thread_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "monitoring-threads",
+                "{{thread_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7 \u00b7 Transfers, Certificates & Calls",
+      "item": [
+        {
+          "name": "Transfer requests (captures transfer_id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/transfer-requests/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transfer-requests"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"transfer_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transfer request detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/transfer-requests/{{transfer_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transfer-requests",
+                "{{transfer_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Call sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/calls/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "calls"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Death certificates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/death-certificates/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "death-certificates"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8 \u00b7 Messaging",
+      "item": [
+        {
+          "name": "Conversations (captures conversation_id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/conversations/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "conversations"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"conversation_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Conversation detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/conversations/{{conversation_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "conversations",
+                "{{conversation_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Messages in conversation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/conversations/{{conversation_id}}/messages/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "conversations",
+                "{{conversation_id}}",
+                "messages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark conversation seen",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/conversations/{{conversation_id}}/seen/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "conversations",
+                "{{conversation_id}}",
+                "seen"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9 \u00b7 Billing & Reports",
+      "item": [
+        {
+          "name": "Billing dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/billing/dashboard/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "billing",
+                "dashboard"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Billing patients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/billing/patients/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "billing",
+                "patients"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Financial report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/financial/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "financial"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Financial report export",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/financial/export/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "financial",
+                "export"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Operational report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/operational/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "operational"
+              ]
+            }
+          }
+        },
+        {
+          "name": "System dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/system/dashboard/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "dashboard"
+              ]
+            }
+          }
+        }
+      ],
+      "description": "Best viewed with admin@velora.com / accounts@velora.com."
+    },
+    {
+      "name": "10 \u00b7 Notifications",
+      "item": [
+        {
+          "name": "Notifications (captures notification_id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notifications/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const arr = j.data || j.results || (Array.isArray(j) ? j : null);",
+                  "if (arr && arr.length) { pm.collectionVariables.set(\"notification_id\", arr[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark one read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notifications/{{notification_id}}/read/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications",
+                "{{notification_id}}",
+                "read"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark all read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notifications/read-all/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications",
+                "read-all"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 \u00b7 Clinical Assistant (AI)",
+      "item": [
+        {
+          "name": "Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/clinical-assistant/chat/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clinical-assistant",
+                "chat"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient_id\": \"{{patient_id}}\",\n  \"message\": \"Explain this patient's latest vital signs in plain language.\"\n}",
+              "options": {
+                "rawLanguage": "json"
+              }
+            },
+            "description": "Needs a valid patient_id and an AI provider key configured (see docs/FREE_AI_PROVIDERS.md)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 \u00b7 Twilio Webhooks (optional)",
+      "item": [
+        {
+          "name": "Voice webhook",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/integrations/twilio/voice/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "twilio",
+                "voice"
+              ]
+            },
+            "description": "Expects Twilio-signed form-encoded payloads; will fail validation outside Twilio."
+          }
+        },
+        {
+          "name": "Status webhook",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/integrations/twilio/status/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "twilio",
+                "status"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
