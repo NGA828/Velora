@@ -60,7 +60,7 @@ export interface ClinicalContext {
     stability_percent?: number | null
     criticality_percent?: number | null
     rule_set?: string
-    measurements?: Record<string, any>
+    measurements?: Record<string, unknown>
     critical_rules_matched?: Array<{
       metric: string
       rule: string

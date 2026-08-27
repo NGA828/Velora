@@ -9,7 +9,7 @@ export function NotFoundPage() {
       <p className="eyebrow">404</p>
       <h1>Page not found</h1>
       <p>The address may be incorrect or the page may not be available to your role.</p>
-      <Link className="button button--primary" to="/">Return to workspace</Link>
+      <Link className="button button--primary" to="/workspace">Return to workspace</Link>
     </main>
   )
 }

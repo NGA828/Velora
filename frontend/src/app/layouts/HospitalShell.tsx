@@ -42,7 +42,7 @@ import { Alert } from '../../shared/ui/feedback/Alert'
 import { Brand } from '../../shared/ui/navigation/Brand'
 
 const defaultNavigation = [
-  { to: '/', label: 'Workspace', icon: Home, end: true },
+  { to: '/workspace', label: 'Workspace', icon: Home, end: true },
   { to: '/messages', label: 'Messages', icon: MessagesSquare, end: false },
   { to: '/calls', label: 'Calls', icon: PhoneCall, end: false },
   { to: '/notifications', label: 'Notifications', icon: Bell, end: false },
@@ -83,6 +83,7 @@ const patientGuardNavigation = [
   { to: '/patient-guard/medical-files', label: 'Medical files', icon: FileText, end: false },
   { to: '/patient-guard/prescriptions', label: 'Prescriptions', icon: Pill, end: false },
   { to: '/patient-guard/monitoring', label: 'Monitoring', icon: MessagesSquare, end: false },
+  { to: '/patient-guard/assistant', label: 'Clinical Assistant', icon: BrainCircuit, end: false },
   { to: '/patient-guard/transfers', label: 'Transfer requests', icon: Send, end: false },
   { to: '/patient-guard/death-certificates', label: 'Death certificate', icon: ScrollText, end: false },
   { to: '/patient-guard/billing', label: 'Billing', icon: ReceiptText, end: false },

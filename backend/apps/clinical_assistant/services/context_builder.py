@@ -14,7 +14,7 @@ from apps.clinical_records.models import (
 )
 from apps.identity.models import UserRole
 from apps.patients.models import CareEpisode, Patient
-from apps.prescriptions.models import Prescription
+from apps.prescriptions.models import Medication, Prescription
 from apps.vital_signs.models import VitalObservation
 
 
@@ -23,6 +23,20 @@ def _calculate_age(date_of_birth) -> int | None:
         return None
     today = timezone.localdate()
     return today.year - date_of_birth.year - ((today.month, today.day) < (date_of_birth.month, date_of_birth.day))
+
+
+def medication_display_name(medication: Medication | None) -> str:
+    """Human-readable medication label (the Medication model has no ``name`` field)."""
+    if medication is None:
+        return "Unknown medication"
+    parts = [medication.generic_name]
+    if getattr(medication, "brand_name", ""):
+        parts.append(f"({medication.brand_name})")
+    if getattr(medication, "strength", ""):
+        parts.append(medication.strength)
+    if getattr(medication, "form", ""):
+        parts.append(medication.form)
+    return " ".join(parts).strip() or "Unknown medication"
 
 
 def build_clinical_context(*, user, patient: Patient) -> dict[str, Any]:
@@ -150,7 +164,7 @@ def build_clinical_context(*, user, patient: Patient) -> dict[str, Any]:
             for item in p.items.all():
                 prescriptions_list.append(
                     {
-                        "medication": item.medication.name,
+                        "medication": medication_display_name(item.medication),
                         "dose": f"{item.dose_amount} {item.dose_unit}",
                         "frequency": item.frequency_display,
                     }
@@ -287,7 +301,7 @@ def build_clinical_context(*, user, patient: Patient) -> dict[str, Any]:
             for item in rx.items.all():
                 rx_list.append(
                     {
-                        "medication": item.medication.name,
+                        "medication": medication_display_name(item.medication),
                         "dose": f"{item.dose_amount} {item.dose_unit}",
                         "route": item.route,
                         "frequency": item.frequency_display,

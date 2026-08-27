@@ -9,6 +9,12 @@ import { WorkspaceHomePage } from './WorkspaceHomePage'
 
 export const createAppRouter = () => createBrowserRouter([
   {
+    path: '/',
+    lazy: async () => ({
+      Component: (await import('../modules/landing/LandingPage')).LandingPage,
+    }),
+  },
+  {
     path: '/login',
     lazy: async () => ({
       Component: (await import('../modules/auth/pages/LoginPage')).LoginPage,
@@ -35,7 +41,7 @@ export const createAppRouter = () => createBrowserRouter([
           {
             element: <HospitalShell />,
             children: [
-              { index: true, element: <WorkspaceHomePage /> },
+              { path: '/workspace', element: <WorkspaceHomePage /> },
               {
                 element: <RequireRole roles={['HEAD_OF_SERVICE']} />,
                 children: [
@@ -292,6 +298,12 @@ export const createAppRouter = () => createBrowserRouter([
                     path: '/patient-guard/monitoring',
                     lazy: async () => ({
                       Component: (await import('../modules/patient-guard/monitoring/PatientGuardMonitoringPage')).PatientGuardMonitoringPage,
+                    }),
+                  },
+                  {
+                    path: '/patient-guard/assistant',
+                    lazy: async () => ({
+                      Component: (await import('../modules/patient-guard/assistant/PatientGuardAssistantPage')).PatientGuardAssistantPage,
                     }),
                   },
                   {

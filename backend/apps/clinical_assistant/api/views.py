@@ -24,7 +24,7 @@ from apps.clinical_assistant.models import (
 )
 from apps.clinical_assistant.permissions import ClinicalAssistantPermission
 from apps.clinical_assistant.services.context_builder import build_clinical_context
-from apps.clinical_assistant.services.deepseek_service import deepseek_service
+from apps.clinical_assistant.services.llm_service import llm_service
 from apps.clinical_assistant.services.prompts import build_system_prompt
 from apps.clinical_assistant.services.safety_validator import SafetyValidator
 from apps.common.throttling import ActionScopedThrottleMixin
@@ -57,12 +57,19 @@ class ChatAPIView(ActionScopedThrottleMixin, APIView):
         if session_id:
             session = get_object_or_404(AssistantSession, pk=session_id, user=request.user, patient=patient)
         else:
-            session, _ = AssistantSession.objects.get_or_create(
-                user=request.user,
-                patient=patient,
-                is_active=True,
-                defaults={"title": f"Chat for {patient.get_full_name()}"},
+            session = (
+                AssistantSession.objects.filter(
+                    user=request.user,
+                    patient=patient,
+                    is_active=True,
+                ).first()
             )
+            if session is None:
+                session = AssistantSession.objects.create(
+                    user=request.user,
+                    patient=patient,
+                    title=f"Chat for {patient.get_full_name()}",
+                )
 
         # 3. Store User Message
         user_msg = AssistantMessage.objects.create(
@@ -72,7 +79,22 @@ class ChatAPIView(ActionScopedThrottleMixin, APIView):
         )
 
         # 4. Build Role-Tailored Structured Clinical Context
-        clinical_context = build_clinical_context(user=request.user, patient=patient)
+        # A malformed record must never break the whole conversation: degrade to a
+        # minimal context instead of failing the user's question with a 500.
+        try:
+            clinical_context = build_clinical_context(user=request.user, patient=patient)
+        except Exception:
+            logger.exception(
+                "Failed to build clinical context for patient %s (user %s); falling back to minimal context.",
+                patient.pk,
+                request.user.pk,
+            )
+            clinical_context = {
+                "context_role": getattr(request.user, "role", ""),
+                "generated_at": timezone.now().isoformat(),
+                "patient": {"medical_record_number": patient.medical_record_number},
+                "context_degraded": True,
+            }
 
         # 5. Build System Prompt
         system_prompt = build_system_prompt(
@@ -90,8 +112,8 @@ class ChatAPIView(ActionScopedThrottleMixin, APIView):
             history_list.append({"role": m.role, "content": m.content})
         history_list.append({"role": "user", "content": user_message_text})
 
-        # 7. Call DeepSeek Service with Graceful Fallback
-        llm_result = deepseek_service.generate_chat_response(
+        # 7. Call LLM Service (free-tier provider with optional failover) with graceful fallback
+        llm_result = llm_service.generate_chat_response(
             system_prompt=system_prompt,
             messages=history_list,
         )
@@ -144,6 +166,8 @@ class ChatAPIView(ActionScopedThrottleMixin, APIView):
                 "validation_notes": validation_notes,
                 "role": request.user.role,
                 "fallback": is_fallback,
+                "provider": llm_result.get("provider", ""),
+                "provider_error": llm_result.get("error"),
             },
         )
 
@@ -208,7 +232,20 @@ class SessionViewSet(viewsets.ModelViewSet):
         if not ClinicalAssistantPermission.user_can_access_patient(user=request.user, patient=patient):
             raise PermissionDenied("You are not authorized to view clinical context for this patient.")
 
-        context = build_clinical_context(user=request.user, patient=patient)
+        try:
+            context = build_clinical_context(user=request.user, patient=patient)
+        except Exception:
+            logger.exception(
+                "Failed to build clinical context for patient %s (user %s); falling back to minimal context.",
+                patient.pk,
+                request.user.pk,
+            )
+            context = {
+                "context_role": getattr(request.user, "role", ""),
+                "generated_at": timezone.now().isoformat(),
+                "patient": {"medical_record_number": patient.medical_record_number},
+                "context_degraded": True,
+            }
         return Response(context, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="clear")
